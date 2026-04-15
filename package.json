@@ -1,0 +1,24 @@
+{
+  "name": "cloove-dojo",
+  "version": "0.1.0",
+  "description": "Eval harness for testing prompt x model x process combinations on coding katas",
+  "type": "module",
+  "scripts": {
+    "kata": "bun run runner/run-kata.ts",
+    "suite": "bun run runner/run-suite.ts",
+    "score": "bun run scorer/score-run.ts",
+    "compare": "bun run scorer/comparator.ts",
+    "dev": "bun run frontend/server.ts",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "yaml": "^2.3.0",
+    "mustache": "^4.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "@types/mustache": "^4.2.0",
+    "@types/node": "^20.0.0"
+  }
+}

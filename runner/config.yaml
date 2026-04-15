@@ -1,0 +1,11 @@
+models:
+  devstral: devstral:24b-small-2505-q4_K_M
+  qwen3-coder: qwen3-coder-next:latest
+
+cline:
+  binary: /home/squibs/.npm-global/bin/cline
+  auto_approve: true
+
+defaults:
+  runs: 10
+  timeout_minutes: 15

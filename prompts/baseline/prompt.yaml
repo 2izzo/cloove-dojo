@@ -1,0 +1,5 @@
+name: baseline
+version: 0.1.0
+description: "Bare minimum prompt — no role, no structure, just the task"
+model_target: any
+ring_support: [1, 2, 3, 4]

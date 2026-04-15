@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloove Dojo</title>
+  <style>
+    :root {
+      --bg: #0d1117; --surface: #161b22; --border: #30363d;
+      --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+      --green: #3fb950; --red: #f85149; --yellow: #d29922;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 2rem; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    h1 span { color: var(--accent); }
+    .subtitle { color: var(--muted); margin-bottom: 2rem; font-size: 0.9rem; }
+    .status-bar { display: flex; gap: 1.5rem; margin-bottom: 2rem; padding: 1rem; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
+    .status-item { display: flex; flex-direction: column; }
+    .status-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .status-value { font-size: 1.1rem; font-weight: 600; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; }
+    .card h2 { font-size: 1.1rem; margin-bottom: 0.25rem; }
+    .card .difficulty { font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem; }
+    .ring-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; background: #1f2937; border: 1px solid var(--border); margin-right: 0.25rem; margin-bottom: 0.5rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.85rem; }
+    th { text-align: left; color: var(--muted); font-weight: 500; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+    .pass { color: var(--green); font-weight: 600; }
+    .fail { color: var(--red); font-weight: 600; }
+    .warn { color: var(--yellow); }
+    .no-data { color: var(--muted); font-style: italic; padding: 2rem; text-align: center; }
+    .bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+    .bar-fill.green { background: var(--green); }
+    .bar-fill.yellow { background: var(--yellow); }
+    .bar-fill.red { background: var(--red); }
+  </style>
+</head>
+<body>
+  <h1>🥋 Cloove <span>Dojo</span></h1>
+  <p class="subtitle">Confidence-driven expansion — prove each step, chain what works</p>
+
+  <div class="status-bar" id="status-bar">Loading...</div>
+  <div class="grid" id="grid">Loading katas...</div>
+
+  <script>
+    async function load() {
+      const [statusRes, katasRes, resultsRes] = await Promise.all([
+        fetch('/api/status'), fetch('/api/katas'), fetch('/api/results')
+      ]);
+      const status = await statusRes.json();
+      const katas = await katasRes.json();
+      const results = await resultsRes.json();
+
+      // Status bar
+      const dates = Object.keys(results).sort().reverse();
+      const totalRuns = Object.values(results).flatMap(d =>
+        Object.values(d).flatMap(k =>
+          Object.values(k).flatMap(p => p)
+        )
+      ).length;
+
+      document.getElementById('status-bar').innerHTML = `
+        <div class="status-item"><span class="status-label">Version</span><span class="status-value">${status.version}</span></div>
+        <div class="status-item"><span class="status-label">Primary Model</span><span class="status-value">${status.models.primary}</span></div>
+        <div class="status-item"><span class="status-label">Katas</span><span class="status-value">${status.katas.length}</span></div>
+        <div class="status-item"><span class="status-label">Total Runs</span><span class="status-value">${totalRuns}</span></div>
+        <div class="status-item"><span class="status-label">Latest</span><span class="status-value">${dates[0] || 'none'}</span></div>
+      `;
+
+      // Kata cards
+      let html = '';
+      for (const [name, kata] of Object.entries(katas)) {
+        const rings = Object.entries(kata.rings || {}).map(([n, r]) =>
+          `<span class="ring-badge">Ring ${n}: ${r.label}</span>`
+        ).join(' ');
+
+        // Find results for this kata (latest date)
+        let tableHtml = '';
+        const latestDate = dates[0];
+        if (latestDate && results[latestDate]?.[name]) {
+          const promptResults = results[latestDate][name];
+          tableHtml = '<table><tr><th>Prompt</th><th>Pass Rate</th><th>Avg Time</th><th>Status</th></tr>';
+          for (const [prompt, runs] of Object.entries(promptResults)) {
+            const passed = runs.filter(r => r.tests_pass).length;
+            const rate = ((passed / runs.length) * 100).toFixed(0);
+            const avgTime = (runs.reduce((a, r) => a + r.time_seconds, 0) / runs.length).toFixed(1);
+            const rateClass = rate >= 80 ? 'pass' : rate >= 50 ? 'warn' : 'fail';
+            const barClass = rate >= 80 ? 'green' : rate >= 50 ? 'yellow' : 'red';
+            tableHtml += `<tr>
+              <td>${prompt}</td>
+              <td><span class="${rateClass}">${passed}/${runs.length} (${rate}%)</span>
+                <div class="bar"><div class="bar-fill ${barClass}" style="width:${rate}%"></div></div>
+              </td>
+              <td>${avgTime}s</td>
+              <td>${runs.filter(r => r.timed_out).length > 0 ? '<span class="warn">⏱</span>' : '<span class="pass">✓</span>'}</td>
+            </tr>`;
+          }
+          tableHtml += '</table>';
+        } else {
+          tableHtml = '<div class="no-data">No runs yet — fire your first kata!</div>';
+        }
+
+        html += `<div class="card">
+          <h2>${kata.name || name}</h2>
+          <div class="difficulty">${kata.difficulty} · ${kata.language} · ${kata.source || ''}</div>
+          ${rings}
+          ${tableHtml}
+        </div>`;
+      }
+      document.getElementById('grid').innerHTML = html;
+    }
+    load();
+  </script>
+</body>
+</html>

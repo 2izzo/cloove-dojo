@@ -1,0 +1,10 @@
+name: cloove-v1
+version: 0.1.0
+description: "First structured Cloove prompt — role, TDD, forcing functions"
+model_target: devstral
+ring_support: [1, 2, 3, 4]
+features:
+  role_definition: true
+  forcing_functions: true
+  completion_status: true
+  boundary_marking: true

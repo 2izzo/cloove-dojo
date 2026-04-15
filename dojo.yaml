@@ -1,0 +1,26 @@
+# Cloove Dojo — Global Configuration
+version: 0.1.0
+
+models:
+  primary: devstral:24b-small-2505-q4_K_M
+  alternate: qwen3-coder-next:latest
+
+defaults:
+  runs_per_prompt: 10
+  timeout_minutes: 15
+  max_cycles: 10
+  language: typescript
+
+cline:
+  binary: /home/squibs/.npm-global/bin/cline
+  auto_approve: true
+
+paths:
+  katas: ./katas
+  prompts: ./prompts
+  results: ./results
+  reports: ./reports
+
+server:
+  port: 20158
+  host: "0.0.0.0"

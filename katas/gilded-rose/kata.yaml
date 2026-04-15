@@ -1,0 +1,31 @@
+name: gilded-rose
+language: typescript
+difficulty: intermediate
+source: "Emily Bache's Gilded Rose Refactoring kata"
+description_file: description.md
+architecture_file: architecture.md
+
+rings:
+  2:
+    label: "Characterize and refactor"
+    provides: [description, architecture, legacy_code]
+    agent_task: "Write characterization tests for the legacy code, then refactor it cleanly"
+  3:
+    label: "Design it yourself"
+    provides: [description]
+    agent_task: "Design from scratch, write tests, implement (no legacy code given)"
+  4:
+    label: "From intent only"
+    provides: [ticket]
+    agent_task: "Read the user story, design, test, implement"
+
+scoring:
+  tests_pass: { weight: 35, type: binary }
+  test_quality: { weight: 20, type: coverage }
+  code_quality: { weight: 20, type: lint_score }
+  cycles: { weight: 5, type: inverse_linear }
+  solution_similarity: { weight: 10, type: structural }
+  time: { weight: 10, type: inverse_linear }
+
+max_cycles: 10
+timeout_minutes: 20
