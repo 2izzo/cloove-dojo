@@ -12,6 +12,7 @@ import { tmpdir } from "os";
 import YAML from "yaml";
 import Mustache from "mustache";
 import { fireCline } from "./adapters/cline";
+import { runFullstackKata } from "./run-fullstack";
 
 const DOJO_ROOT = resolve(import.meta.dir, "..");
 
@@ -137,6 +138,44 @@ async function main() {
   console.log(`Model: ${model || dojoConfig.models.primary}\n`);
 
   const { kataYaml, ringConfig, description, architecture, tests, kataDir } = loadKata(kata, ring);
+
+  // --- Fullstack routing ---
+  // If kata type is "fullstack", delegate to the fullstack runner
+  if (kataYaml.type === "fullstack") {
+    console.log("  Detected fullstack kata — using fullstack pipeline\n");
+
+    const resultsDir = join(DOJO_ROOT, "results", new Date().toISOString().split("T")[0], kata, prompt);
+    mkdirSync(resultsDir, { recursive: true });
+
+    for (let i = 1; i <= runs; i++) {
+      console.log(`--- Fullstack Run ${i}/${runs} ---`);
+      const workspace = join(tmpdir(), `dojo-${kata}-fullstack-${Date.now()}`);
+
+      const fsResult = await runFullstackKata({
+        kataDir,
+        workspaceDir: workspace,
+        dojoRoot: DOJO_ROOT,
+      });
+
+      console.log(`  Scaffold: ${fsResult.phases.scaffold.success ? "✓" : "✗"}`);
+      console.log(`  Dev:      ${fsResult.phases.dev.success ? "✓" : "✗"} ${fsResult.phases.dev.message}`);
+      console.log(`  Comply:   ${fsResult.phases.compliance.success ? "✓" : "✗"} (score: ${fsResult.phases.compliance.score})`);
+      console.log(`  SDET:     ${fsResult.phases.sdet.success ? "✓" : "✗"}`);
+      console.log(`  E2E:      ${fsResult.phases.tests_e2e.success ? "✓" : "✗"}`);
+      console.log(`  Unit:     ${fsResult.phases.tests_unit.success ? "✓" : "✗"}`);
+      console.log(`  Overall:  ${fsResult.success ? "PASS ✓" : "FAIL ✗"} (${fsResult.duration}ms)`);
+
+      writeFileSync(
+        join(resultsDir, `run-${String(i).padStart(2, "0")}.json`),
+        JSON.stringify(fsResult, null, 2)
+      );
+    }
+
+    const totalMsg = `\n=== Fullstack Summary for ${kata} ===\nRuns: ${runs} | Results: ${resultsDir}`;
+    console.log(totalMsg);
+    return;
+  }
+
 
   // Render prompt
   const renderedPrompt = renderPrompt(prompt, {

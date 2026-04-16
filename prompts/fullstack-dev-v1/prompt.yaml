@@ -1,0 +1,16 @@
+name: fullstack-dev-v1
+version: 0.1.0
+source: "Full-Stack Dev Cloove — builds Vue 3 apps from contract"
+role: developer
+model_target: devstral
+ring_support: [1, 2, 3, 4]
+
+features:
+  role_definition: true
+  forcing_functions: true
+  completion_status: true
+  boundary_marking: true
+  contract_driven: true
+  semantic_html: true
+  component_architecture: true
+  unit_test_generation: true
