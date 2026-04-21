@@ -1,0 +1,62 @@
+{
+  "success": false,
+  "kata_name": "todo-app",
+  "workspace": "/home/squibs/.rizzo/dojo/.workspace/fullstack-todo-app-2026-04-20T13-07-44Z",
+  "ring": 1,
+  "prompt": "fullstack-dev-v1",
+  "sdet_prompt": "sdet-v1",
+  "model": "devstral:24b-small-2505-q4_K_M",
+  "phases": {
+    "scaffold": {
+      "success": true,
+      "message": "Scaffolded workspace at /home/squibs/.rizzo/dojo/.workspace/fullstack-todo-app-2026-04-20T13-07-44Z"
+    },
+    "dev": {
+      "success": true,
+      "message": "Dev Cloove completed in 44.1s (15 files, 3588 tokens)",
+      "details": "App.vue, App.vue, App.vue, App.vue, App.vue, App.vue, App.vue, App.vue, App.vue, App.vue, App.vue, App.vue, App.vue, App.vue, App.vue"
+    },
+    "compliance": {
+      "success": false,
+      "score": 62,
+      "totalElements": 6,
+      "foundElements": 0,
+      "missingElements": [
+        "app-title",
+        "todo-input",
+        "todo-submit",
+        "todo-list",
+        "active-count",
+        "clear-completed"
+      ],
+      "typeErrors": [],
+      "errors": [
+        "Semantic requirement missing: <header> (App header containing title)",
+        "Semantic requirement missing: <main> (Primary content area with form and list)",
+        "Semantic requirement missing: <footer> (Footer with item count and clear button)",
+        "Semantic requirement missing: <form> (Todo input form)"
+      ]
+    },
+    "sdet": {
+      "success": true,
+      "message": "SDET Cloove completed in 48.8s (5 test files, 3308 tokens)",
+      "details": "e2e.test.ts, e2e.test.ts, e2e.test.ts, e2e.test.ts, e2e.test.ts"
+    },
+    "tests_unit": {
+      "success": false,
+      "message": "Unit tests failed",
+      "error": "Command failed: npm test\n\n⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯\n\n FAIL  tests/e2e.test.ts [ tests/e2e.test.ts ]\nError: Transform failed with 1 error:\n/data/rizzo/dojo/.workspace/fullstack-todo-app-2026-04-20T13-07-44Z/tests/e2e.test.ts:1:1: ERROR: Syntax error \"#\"\n  Plugin: vite:esbuild\n  File: /data/rizzo/dojo/.workspace/fullstack-todo-app-2026-04-20T13-07-44Z/tests/e2e.test.ts:1:1\n  \n  Syntax error \"#\"\n  1  |  ## Step 4: On Failure — Diagnose\n     |   ^\n  2  |  \n  3  |  If any test fails, we'll add code to take a screenshot and log the actual DOM state:\n  \n ❯ failureErrorWithLog node_modules/esbuild/lib/main.js:1467:15\n ❯ node_modules/esbuild/lib/main.js:736:50\n ❯ responseCallbacks.<computed> node_modules/esbuild/lib/main.js:603:9\n ❯ handleIncomingPacket node_modules/esbuild/lib/main.js:658:12\n ❯ Socket.readFromStdout node_modules/esbuild/lib/main.js:581:7\n\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯\n\n",
+      "details": "\n> {{kata_name}}@0.0.0 test\n> vitest run\n\n\n RUN  v3.2.4 /data/rizzo/dojo/.workspace/fullstack-todo-app-2026-04-20T13-07-44Z\n\n\n Test Files  1 failed (1)\n      Tests  no tests\n   Start at  07:09:22\n   Duration  334ms (transform 10ms, setup 0ms, collect 0ms, tests 0ms, environment 0ms, prepare 42ms)\n\n"
+    },
+    "tests_e2e": {
+      "success": false,
+      "message": "E2E tests failed",
+      "error": "Command failed: npm run test:e2e\nNo test files found, exiting with code 1\n\nfilter: e2e/\ninclude: **/*.{test,spec}.?(c|m)[jt]s?(x)\nexclude:  **/node_modules/**, **/dist/**, **/cypress/**, **/.{idea,git,cache,output,temp}/**, **/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*\n\n",
+      "details": "\n> {{kata_name}}@0.0.0 test:e2e\n> vitest run e2e/\n\n\n RUN  v3.2.4 /data/rizzo/dojo/.workspace/fullstack-todo-app-2026-04-20T13-07-44Z\n\n"
+    }
+  },
+  "duration": 98685,
+  "errors": [
+    "Compliance check failed: 6 missing elements"
+  ]
+}

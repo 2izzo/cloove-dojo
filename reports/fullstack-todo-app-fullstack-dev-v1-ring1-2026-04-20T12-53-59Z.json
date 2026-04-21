@@ -1,0 +1,45 @@
+{
+  "success": false,
+  "kata_name": "todo-app",
+  "workspace": "/home/squibs/.rizzo/dojo/.workspace/fullstack-todo-app-2026-04-20T12-53-59Z",
+  "ring": 1,
+  "prompt": "fullstack-dev-v1",
+  "sdet_prompt": "sdet-v1",
+  "model": "devstral:24b-small-2505-q4_K_M",
+  "phases": {
+    "scaffold": {
+      "success": true,
+      "message": "Scaffolded workspace at /home/squibs/.rizzo/dojo/.workspace/fullstack-todo-app-2026-04-20T12-53-59Z"
+    },
+    "dev": {
+      "success": false,
+      "message": "Dev Cloove failed",
+      "error": "Error: Dev Cloove failed: Ollama HTTP 503: {\"error\":\"server busy, please try again.  maximum pending requests exceeded\"}"
+    },
+    "compliance": {
+      "success": false,
+      "score": 0,
+      "totalElements": 0,
+      "foundElements": 0,
+      "missingElements": [],
+      "typeErrors": [],
+      "errors": []
+    },
+    "sdet": {
+      "success": false,
+      "message": ""
+    },
+    "tests_unit": {
+      "success": false,
+      "message": ""
+    },
+    "tests_e2e": {
+      "success": false,
+      "message": ""
+    }
+  },
+  "duration": 20386,
+  "errors": [
+    "Fatal error: Error: Dev Cloove failed: Ollama HTTP 503: {\"error\":\"server busy, please try again.  maximum pending requests exceeded\"}"
+  ]
+}

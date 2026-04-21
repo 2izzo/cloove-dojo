@@ -1,0 +1,13 @@
+# Node build artifacts
+node_modules/
+package-lock.json
+
+# Eval run logs
+*.log
+
+# Older results dir (pre-.workspace convention)
+results/
+
+# Per-run deps inside .workspace (preserve code, drop deps)
+.workspace/*/node_modules/
+.workspace/*/package-lock.json
