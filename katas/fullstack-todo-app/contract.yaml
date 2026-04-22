@@ -1,0 +1,242 @@
+framework: vue3
+dev_server:
+  command: npm run dev
+  port: 5173
+  ready_signal: "Local:"
+  startup_timeout_ms: 30000
+semantic_requirements:
+  - element: header
+    required: true
+    description: App header containing title
+  - element: main
+    required: true
+    description: Primary content area with form and list
+  - element: footer
+    required: true
+    description: Footer with item count and clear button
+  - element: form
+    required: true
+    description: Todo input form
+elements:
+  - testid: app-title
+    element: h1
+    location: header
+    description: Application title
+    assert: visible
+  - testid: todo-input
+    element: input
+    type: text
+    location: form
+    description: Text input for new todo
+    assert: visible
+    placeholder: What needs to be done?
+  - testid: todo-submit
+    element: button
+    location: form
+    description: Submit button to add new todo
+    assert:
+      - visible
+      - enabled
+  - testid: todo-list
+    element: ul
+    location: main
+    description: List of todo items
+    assert: visible
+    children:
+      testid_pattern: todo-item-{index}
+      element: li
+      contains:
+        - testid: item-text
+          element: span
+          description: Todo item text content
+        - testid: item-toggle
+          element: input
+          type: checkbox
+          description: Toggle complete/active
+        - testid: item-delete
+          element: button
+          description: Delete this todo item
+  - testid: active-count
+    element: span
+    location: footer
+    description: Displays number of active (incomplete) todos
+    assert: visible
+  - testid: clear-completed
+    element: button
+    location: footer
+    description: Removes all completed todos. Only visible when completed todos exist.
+    assert: conditional
+    visible_when: At least one todo is completed
+routes:
+  - path: /
+    description: Single page — todo interface
+    elements:
+      - app-title
+      - todo-input
+      - todo-submit
+      - todo-list
+      - active-count
+user_flows:
+  - name: add-todo
+    description: User adds a new todo item via button click
+    preconditions: App loaded, no existing todos
+    steps:
+      - action: type
+        target: "[data-testid='todo-input']"
+        value: Buy milk
+      - action: click
+        target: "[data-testid='todo-submit']"
+    assertions:
+      - assert: visible
+        target: "[data-testid='todo-item-0']"
+      - assert: text_contains
+        target: "[data-testid='todo-item-0'] [data-testid='item-text']"
+        value: Buy milk
+      - assert: value_equals
+        target: "[data-testid='todo-input']"
+        value: ""
+        description: Input clears after submission
+      - assert: text_contains
+        target: "[data-testid='active-count']"
+        value: "1"
+  - name: add-multiple-todos
+    description: User adds several todos, count updates
+    preconditions: App loaded, no existing todos
+    steps:
+      - action: type
+        target: "[data-testid='todo-input']"
+        value: First todo
+      - action: click
+        target: "[data-testid='todo-submit']"
+      - action: type
+        target: "[data-testid='todo-input']"
+        value: Second todo
+      - action: click
+        target: "[data-testid='todo-submit']"
+      - action: type
+        target: "[data-testid='todo-input']"
+        value: Third todo
+      - action: click
+        target: "[data-testid='todo-submit']"
+    assertions:
+      - assert: count
+        target: "[data-testid='todo-list'] li"
+        value: 3
+      - assert: text_contains
+        target: "[data-testid='active-count']"
+        value: "3"
+  - name: reject-empty-submission
+    description: Empty or whitespace-only input is ignored
+    preconditions: App loaded
+    steps:
+      - action: click
+        target: "[data-testid='todo-submit']"
+    assertions:
+      - assert: count
+        target: "[data-testid='todo-list'] li"
+        value: 0
+        description: No todo added for empty input
+  - name: complete-todo
+    description: User marks a todo as completed
+    preconditions: App loaded, no existing todos
+    setup:
+      - action: type
+        target: "[data-testid='todo-input']"
+        value: Completable item
+      - action: click
+        target: "[data-testid='todo-submit']"
+    steps:
+      - action: click
+        target: "[data-testid='todo-item-0'] [data-testid='item-toggle']"
+    assertions:
+      - assert: has_class
+        target: "[data-testid='todo-item-0']"
+        class: completed
+      - assert: text_contains
+        target: "[data-testid='active-count']"
+        value: "0"
+        description: Active count decrements
+  - name: uncomplete-todo
+    description: User unchecks a completed todo
+    preconditions: App loaded, no existing todos
+    setup:
+      - action: type
+        target: "[data-testid='todo-input']"
+        value: Toggle me
+      - action: click
+        target: "[data-testid='todo-submit']"
+      - action: click
+        target: "[data-testid='todo-item-0'] [data-testid='item-toggle']"
+    steps:
+      - action: click
+        target: "[data-testid='todo-item-0'] [data-testid='item-toggle']"
+    assertions:
+      - assert: not_has_class
+        target: "[data-testid='todo-item-0']"
+        class: completed
+      - assert: text_contains
+        target: "[data-testid='active-count']"
+        value: "1"
+  - name: delete-todo
+    description: User deletes a specific todo
+    preconditions: App loaded, no existing todos
+    setup:
+      - action: type
+        target: "[data-testid='todo-input']"
+        value: Delete me
+      - action: click
+        target: "[data-testid='todo-submit']"
+      - action: type
+        target: "[data-testid='todo-input']"
+        value: Keep me
+      - action: click
+        target: "[data-testid='todo-submit']"
+    steps:
+      - action: click
+        target: "[data-testid='todo-item-0'] [data-testid='item-delete']"
+    assertions:
+      - assert: count
+        target: "[data-testid='todo-list'] li"
+        value: 1
+      - assert: text_contains
+        target: "[data-testid='todo-item-0'] [data-testid='item-text']"
+        value: Keep me
+      - assert: text_contains
+        target: "[data-testid='active-count']"
+        value: "1"
+  - name: clear-completed
+    description: User clears all completed todos at once
+    preconditions: App loaded, no existing todos
+    setup:
+      - action: type
+        target: "[data-testid='todo-input']"
+        value: Active item
+      - action: click
+        target: "[data-testid='todo-submit']"
+      - action: type
+        target: "[data-testid='todo-input']"
+        value: Complete me
+      - action: click
+        target: "[data-testid='todo-submit']"
+      - action: click
+        target: "[data-testid='todo-item-1'] [data-testid='item-toggle']"
+    steps:
+      - action: click
+        target: "[data-testid='clear-completed']"
+    assertions:
+      - assert: count
+        target: "[data-testid='todo-list'] li"
+        value: 1
+      - assert: text_contains
+        target: "[data-testid='todo-item-0'] [data-testid='item-text']"
+        value: Active item
+      - assert: hidden
+        target: "[data-testid='clear-completed']"
+        description: Clear button hides when no completed todos remain
+accessibility:
+  - rule: labels
+    description: Form input has an associated label
+  - rule: keyboard
+    description: Enter key submits the form (not just button click)
+  - rule: aria
+    description: Completed items have appropriate aria state

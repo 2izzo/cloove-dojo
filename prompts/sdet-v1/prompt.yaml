@@ -1,0 +1,16 @@
+name: sdet-v1
+version: 0.1.0
+source: "SDET Cloove — writes Puppeteer E2E tests against the contract"
+role: sdet
+model_target: devstral
+ring_support: [1, 2, 3, 4]
+
+features:
+  role_definition: true
+  forcing_functions: true
+  completion_status: true
+  boundary_marking: true
+  contract_driven: true
+  read_only_on_source: true
+  e2e_test_generation: true
+  puppeteer_driven: true
