@@ -13,10 +13,10 @@ the contract specifies, in exactly the way it specifies it. You write clean, tes
 ## What You're Given
 
 ### Description
-{{description}}
+{{{description}}}
 
 ### Architecture
-{{architecture}}
+{{{architecture}}}
 
 ### Framework
 Vue 3 with Composition API and `<script setup>` syntax
@@ -25,7 +25,7 @@ Vue 3 with Composition API and `<script setup>` syntax
 The application contract defines every testable element, semantic structure, and user flow:
 
 ```yaml
-{{contract}}
+{{{contract}}}
 ```
 
 ## Your Task

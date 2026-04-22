@@ -16,10 +16,10 @@ report.
 ### Contract
 The application contract defines every testable element, route, and user flow:
 
-{{contract}}
+{{{contract}}}
 
 ### Application Directory
-The built application is at: `{{app_dir}}`
+The built application is at: `{{{app_dir}}}`
 
 It has a `package.json` with all dependencies declared. You will need to:
 1. Run `npm install` in the app directory
@@ -41,7 +41,11 @@ Read the contract carefully. Identify:
 
 ### Step 2: Write E2E Tests
 
-Create a test file at `{{app_dir}}/e2e/{{kata_name}}.e2e.ts` using this structure:
+**CRITICAL — File Location:** Your E2E test file MUST be placed under `e2e/`,
+NOT under `tests/` or `src/__tests__/`. The runner invokes `npm run test:e2e`
+which only scans `e2e/`. Files placed elsewhere will not be executed.
+
+Create a test file at `{{{app_dir}}}/e2e/{{kata_name}}.e2e.ts` using this structure:
 
 ```typescript
 import puppeteer, { Browser, Page } from "puppeteer";
@@ -87,7 +91,7 @@ For each `user_flow` in the contract:
 
 ```bash
 # Install dependencies
-cd {{app_dir}} && npm install
+cd {{{app_dir}}} && npm install
 
 # Start dev server in background
 {{dev_command}} &

@@ -291,10 +291,22 @@ async function scaffoldWorkspace(
       };
     }
 
+    // Load kata metadata so we can render templated scaffold files
+    const kataYamlPath = join(kataDir, "kata.yaml");
+    const kataYaml = existsSync(kataYamlPath)
+      ? (YAML.parse(readFileSync(kataYamlPath, "utf-8")) as any)
+      : {};
+    const kataName: string =
+      kataYaml.name || kataDir.split("/").pop() || "unknown";
+    const kataTitle: string =
+      kataYaml.title || kataYaml.description || kataName;
+
     // Create workspace directory
     mkdirSync(workspaceDir, { recursive: true });
 
-    // Copy template files
+    // Files that should be Mustache-rendered (they contain {{kata_name}}
+    // and {{kata_title}} placeholders) vs copied verbatim.
+    const templatedFiles = new Set(["package.json", "index.html"]);
     const templateFiles = [
       "package.json",
       "tsconfig.json",
@@ -303,10 +315,21 @@ async function scaffoldWorkspace(
       "index.html",
     ];
 
+    const view = {
+      kata_name: kataName,
+      kata_title: kataTitle,
+    };
+
     for (const file of templateFiles) {
       const src = join(templateDir, file);
       const dst = join(workspaceDir, file);
-      if (existsSync(src)) {
+      if (!existsSync(src)) continue;
+
+      if (templatedFiles.has(file)) {
+        const raw = readFileSync(src, "utf-8");
+        const rendered = Mustache.render(raw, view);
+        writeFileSync(dst, rendered);
+      } else {
         copyFileSync(src, dst);
       }
     }
