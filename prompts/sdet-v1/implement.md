@@ -45,7 +45,7 @@ Read the contract carefully. Identify:
 NOT under `tests/` or `src/__tests__/`. The runner invokes `npm run test:e2e`
 which only scans `e2e/`. Files placed elsewhere will not be executed.
 
-Create a test file at `{{{app_dir}}}/e2e/{{kata_name}}.e2e.ts` using this structure:
+Create a test file at `{{{app_dir}}}/e2e/{{kata_name}}.e2e.test.ts` using this structure (the filename MUST end in `.test.ts` — vitest's default include pattern requires it, files ending in just `.e2e.ts` will be silently skipped):
 
 ```typescript
 import puppeteer, { Browser, Page } from "puppeteer";
@@ -101,7 +101,7 @@ DEV_PID=$!
 npx wait-on http://localhost:{{dev_port}} --timeout 30000
 
 # Run E2E tests
-npx vitest run e2e/{{kata_name}}.e2e.ts --reporter=verbose
+npx vitest run e2e/{{kata_name}}.e2e.test.ts --reporter=verbose
 
 # Capture exit code
 TEST_EXIT=$?
