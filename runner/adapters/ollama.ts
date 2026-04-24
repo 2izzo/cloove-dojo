@@ -72,6 +72,7 @@ Rules:
 - Use relative paths only (no leading slash, no "..", no Windows drive letters).
 - Inside a block: raw file content only — no markdown fences, no backticks, no prose.
 - Prose is allowed BEFORE the first block or AFTER the last block, never between markers.
+- When tests are provided, your implementation MUST export every symbol the tests import. If the test does a named import of a class, export that class (export keyword required).
 - End your entire response with a single final line: **STATUS:** DONE`;
 
 export async function fireOllama(
