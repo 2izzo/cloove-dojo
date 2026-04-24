@@ -188,6 +188,7 @@ async function main() {
         kataDir,
         workspaceDir: workspace,
         dojoRoot: DOJO_ROOT,
+        model,
       });
 
       console.log(`  Scaffold: ${fsResult.phases.scaffold.success ? "✓" : "✗"}`);

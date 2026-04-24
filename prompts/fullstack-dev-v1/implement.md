@@ -66,6 +66,40 @@ Then your template MUST have:
 <input data-testid="todo-input" type="text" />
 ```
 
+**CRITICAL — `testid_pattern` placeholders mean ARRAY POSITION, not object property.**
+
+When the contract specifies a pattern like `testid_pattern: todo-item-{index}`, the `{index}` token is the 0-based position in the v-for loop, NOT a property of the item. These will drift apart the moment the user deletes or reorders items.
+
+**Correct:**
+```vue
+<template>
+  <ul data-testid="todo-list">
+    <li
+      v-for="(todo, index) in todos"
+      :key="todo.id"
+      :data-testid="`todo-item-${index}`"
+    >
+      <!-- child testids are LITERAL, not templated, unless the contract says otherwise -->
+      <span data-testid="item-text">{{ todo.text }}</span>
+      <input data-testid="item-toggle" type="checkbox" :checked="todo.completed" @change="..." />
+      <button data-testid="item-delete" @click="...">Delete</button>
+    </li>
+  </ul>
+</template>
+```
+
+**Wrong — do NOT do any of these:**
+```vue
+<!-- WRONG: uses the item's internal id, which diverges from array position after deletes -->
+<li :data-testid="`todo-item-${todo.id}`">
+
+<!-- WRONG: templates the child testid pattern when the contract only templates the parent -->
+<input :data-testid="`item-toggle-${todo.id}`" />
+<button :data-testid="`item-delete-${index}`" />
+```
+
+Rule of thumb: only the token that appears inside braces in `testid_pattern` gets templated. Look up the pattern in the contract. If it says `todo-item-{index}`, only the OUTER `todo-item-` testid is templated — every inner `item-text`, `item-toggle`, `item-delete` is a literal testid string unless the contract explicitly templates them too.
+
 ### Step 3: Semantic HTML Structure
 
 Use the semantic HTML elements the contract requires:
@@ -82,6 +116,25 @@ Use the semantic HTML elements the contract requires:
 - etc.
 
 Do NOT use `<div role="button">`. Use actual `<button>` elements.
+
+**CRITICAL — `assert: conditional` applies ONLY to the element it is attached to.**
+
+When the contract marks a single element `assert: conditional` (e.g., `clear-completed`), apply `v-if` ONLY to that element. Do NOT wrap the whole `<footer>`, `<main>`, `<section>`, or any parent element in a `v-if`. All `semantic_requirements` (header, main, footer, form, etc.) are unconditional and must always render, regardless of whether they contain conditional children.
+
+**Wrong:**
+```vue
+<TodoFooter v-if="todos.length > 0" ... />
+<!-- ^ hides the <footer> entirely; now active-count can't be found by the oracle -->
+```
+
+**Correct:**
+```vue
+<!-- footer is always rendered; only the conditional button inside flips -->
+<footer>
+  <span data-testid="active-count">{{ activeCount }}</span>
+  <button v-if="hasCompleted" data-testid="clear-completed">Clear</button>
+</footer>
+```
 
 ### Step 4: Build the Main App
 
@@ -146,15 +199,17 @@ Add basic CSS to make the app readable:
 
 Put global styles in `src/style.css` and component styles in `<style scoped>` blocks.
 
-### Step 8: Verify
+### Step 8: Verify (STATIC CHECKS ONLY)
 
 Before you finish:
 1. Run `npm test` — all unit tests pass
-2. Run `npm run dev` and manually check:
+2. Re-read your code against the contract (do NOT run the dev server):
    - All semantic elements are present (header, main, footer, etc.)
-   - All `data-testid` attributes exist and match the contract
-   - All user flows work (type into inputs, click buttons, see results update)
-   - All assertions from user flows pass (counts update, classes change, etc.)
+   - All `data-testid` attributes exist and match the contract exactly
+   - All user flows are implemented (event handlers wired, state updates correct)
+   - All assertions in user flows are achievable (counts update, classes change, etc.)
+
+**CRITICAL — Do NOT run `npm run dev` or any long-running dev server command.** The SDET phase runs immediately after you finish and is responsible for starting the dev server and verifying all user flows with Puppeteer. If you start `npm run dev`, it will never exit, you will never report DONE, and the run will time out. Static review + unit tests is enough — trust the SDET phase to exercise the live app.
 
 ### Constraints
 
@@ -170,6 +225,7 @@ Before you finish:
 
 ### DO NOT
 
+- Do NOT run `npm run dev`, `vite`, or any long-running dev server (the SDET phase handles that)
 - Do NOT add dependencies beyond what's in `package.json`
 - Do NOT modify `package.json`
 - Do NOT use non-semantic HTML (e.g., `<div role="button">` instead of `<button>`)

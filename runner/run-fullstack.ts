@@ -1,5 +1,5 @@
 import { resolve, join } from "path";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { execSync } from "child_process";
 import Mustache from "mustache";
 import YAML from "yaml";
@@ -18,6 +18,7 @@ export interface FullstackKataOptions {
   kataDir: string; // Path to kata directory
   workspaceDir: string; // Where to create workspace for this run
   dojoRoot?: string; // Root of dojo directory (inferred if not given)
+  model?: string; // Optional model override (passed to fireOllama)
 }
 
 export interface FullstackRunResult {
@@ -149,7 +150,8 @@ export async function runFullstackKata(
         kataDir,
         workspaceDir,
         contract,
-        dojoRoot
+        dojoRoot,
+        opts.model
       );
       result.phases.dev = devResult;
       if (!devResult.success) {
@@ -162,6 +164,24 @@ export async function runFullstackKata(
         error: String(e),
       };
       throw e;
+    }
+
+    // --- Phase 4.5: Copy blind e2e oracle tests ---
+    // Tests live under kata/e2e/ and get copied into workspace/e2e/ only
+    // AFTER the dev Cloove has finished. This keeps the dev agent blind to
+    // the oracle (real kata discipline).
+    try {
+      const kataE2eDir = join(kataDir, "e2e");
+      if (existsSync(kataE2eDir)) {
+        mkdirSync(join(workspaceDir, "e2e"), { recursive: true });
+        for (const f of readdirSync(kataE2eDir)) {
+          const src = join(kataE2eDir, f);
+          const dst = join(workspaceDir, "e2e", f);
+          if (existsSync(src)) copyFileSync(src, dst);
+        }
+      }
+    } catch (e) {
+      result.errors.push(`Failed to copy blind e2e tests: ${String(e)}`);
     }
 
     // --- Phase 5: Start Dev Server ---
@@ -202,25 +222,41 @@ export async function runFullstackKata(
     }
 
     // --- Phase 7: SDET Prompt & Fire ---
-    try {
-      const sdetResult = await fireSdetCloove(
-        result.kata_name,
-        kataDir,
-        workspaceDir,
-        contract,
-        dojoRoot
-      );
-      result.phases.sdet = sdetResult;
-      if (!sdetResult.success) {
-        result.errors.push(`SDET Cloove returned: ${sdetResult.error}`);
-        // Don't throw — SDET failure is non-blocking for now
-      }
-    } catch (e) {
+    // Ring 1 blind-oracle mode: if the kata ships pre-written e2e tests under
+    // workspace/e2e/ (copied from kata/e2e/ during scaffold), those tests ARE
+    // the oracle — skip the SDET Cloove entirely.
+    const workspaceE2eDir = join(workspaceDir, "e2e");
+    const hasPreseededE2e =
+      existsSync(workspaceE2eDir) &&
+      readdirSync(workspaceE2eDir).some((f) => f.endsWith(".test.ts"));
+    if (hasPreseededE2e) {
       result.phases.sdet = {
-        success: false,
-        message: "SDET Cloove failed",
-        error: String(e),
+        success: true,
+        message:
+          "Skipped — kata ships blind e2e tests (Ring 1 oracle mode)",
       };
+    } else {
+      try {
+        const sdetResult = await fireSdetCloove(
+          result.kata_name,
+          kataDir,
+          workspaceDir,
+          contract,
+          dojoRoot,
+          opts.model
+        );
+        result.phases.sdet = sdetResult;
+        if (!sdetResult.success) {
+          result.errors.push(`SDET Cloove returned: ${sdetResult.error}`);
+          // Don't throw — SDET failure is non-blocking for now
+        }
+      } catch (e) {
+        result.phases.sdet = {
+          success: false,
+          message: "SDET Cloove failed",
+          error: String(e),
+        };
+      }
     }
 
     // --- Phase 8: E2E Tests ---
@@ -339,6 +375,21 @@ async function scaffoldWorkspace(
     mkdirSync(join(workspaceDir, "src", "__tests__"), { recursive: true });
     mkdirSync(join(workspaceDir, "e2e"), { recursive: true });
 
+    // Copy files from scaffold/src/ into workspace/src/ (e.g. main.ts entry).
+    // Without this, Vue never mounts and the app is a blank <div id="app"></div>.
+    const scaffoldSrcDir = join(templateDir, "src");
+    if (existsSync(scaffoldSrcDir)) {
+      for (const f of readdirSync(scaffoldSrcDir)) {
+        const src = join(scaffoldSrcDir, f);
+        const dst = join(workspaceDir, "src", f);
+        copyFileSync(src, dst);
+      }
+    }
+
+    // NOTE: Do NOT copy kata/e2e/ tests into workspace at scaffold time.
+    // The dev Cloove must remain BLIND to the oracle tests. They get copied
+    // in after the dev phase completes — see Phase 4.5 in the main runner.
+
     return {
       success: true,
       message: `Scaffolded workspace at ${workspaceDir}`,
@@ -360,7 +411,8 @@ async function fireDevCloove(
   kataDir: string,
   workspaceDir: string,
   contract: Contract,
-  dojoRoot: string
+  dojoRoot: string,
+  model?: string
 ): Promise<PhaseResult> {
   try {
     const promptPath = join(dojoRoot, "prompts", "fullstack-dev-v1", "implement.md");
@@ -405,7 +457,8 @@ async function fireDevCloove(
     const ollamaResult = await fireOllama(
       renderedPrompt,
       workspaceDir,
-      10 // 10 minutes for dev
+      10, // 10 minutes for dev
+      model
     );
 
     if (ollamaResult.exitCode !== 0 || ollamaResult.timedOut) {
@@ -441,7 +494,8 @@ async function fireSdetCloove(
   kataDir: string,
   workspaceDir: string,
   contract: Contract,
-  dojoRoot: string
+  dojoRoot: string,
+  model?: string
 ): Promise<PhaseResult> {
   try {
     const promptPath = join(dojoRoot, "prompts", "sdet-v1", "implement.md");
@@ -473,7 +527,8 @@ async function fireSdetCloove(
     const ollamaResult = await fireOllama(
       renderedPrompt,
       workspaceDir,
-      10 // 10 minutes for SDET
+      10, // 10 minutes for SDET
+      model
     );
 
     if (ollamaResult.exitCode !== 0 || ollamaResult.timedOut) {
