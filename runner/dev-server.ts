@@ -50,6 +50,7 @@ export async function startDevServer(
     cwd: workdir,
     shell: true,
     stdio: ["ignore", "pipe", "pipe"],
+    detached: true, // put child in its own process group so we can kill the whole tree
   });
 
   const devServer: DevServer = {
@@ -128,32 +129,43 @@ export async function startDevServer(
  * @param process - ChildProcess to kill
  * @throws Error if kill fails or times out
  */
-async function killProcessTree(process: ChildProcess): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (!process.pid) {
+async function killProcessTree(proc: ChildProcess): Promise<void> {
+  return new Promise((resolve) => {
+    if (!proc.pid) {
       resolve();
       return;
     }
 
-    try {
-      // Kill the process group (negative PID) to catch children spawned by shell
-      process.kill("SIGTERM");
-
-      const killTimeout = setTimeout(() => {
-        try {
-          process.kill("SIGKILL");
-        } catch (e) {
-          // Already dead, no problem
-        }
-      }, 3000);
-
-      process.on("exit", () => {
-        clearTimeout(killTimeout);
+    const pid = proc.pid;
+    let resolved = false;
+    const done = () => {
+      if (!resolved) {
+        resolved = true;
         resolve();
-      });
-    } catch (error) {
-      reject(error);
+      }
+    };
+
+    proc.on("exit", done);
+    proc.on("close", done);
+
+    // Signal the whole process group (negative PID). spawn() was called
+    // with detached: true, so the child is a group leader and -pid
+    // addresses every descendant (vite, esbuild workers, etc).
+    try {
+      globalThis.process.kill(-pid, "SIGTERM");
+    } catch {
+      try { proc.kill("SIGTERM"); } catch {}
     }
+
+    // After 2s, escalate to SIGKILL on the whole group.
+    setTimeout(() => {
+      try {
+        globalThis.process.kill(-pid, "SIGKILL");
+      } catch {
+        try { proc.kill("SIGKILL"); } catch {}
+      }
+      setTimeout(done, 500);
+    }, 2000);
   });
 }
 

@@ -283,13 +283,17 @@ export async function runFullstackKata(
       };
     }
 
-    // Determine overall success
+    // Determine overall success.
+    // Ring 1 blind-oracle discipline: unit tests are self-written by the
+    // dev Cloove, so unit-pass tells us little about contract fidelity.
+    // The blind E2E oracle is the real signal. Unit stays recorded in
+    // phases.tests_unit but is informational, not a gate. See the Apr-22
+    // open-question note in docs/RING1.md.
     result.success =
       result.phases.scaffold.success &&
       result.phases.dev.success &&
       result.phases.compliance.success &&
-      result.phases.tests_e2e.success &&
-      result.phases.tests_unit.success;
+      result.phases.tests_e2e.success;
   } catch (e) {
     result.errors.push(`Fatal error: ${String(e)}`);
   } finally {

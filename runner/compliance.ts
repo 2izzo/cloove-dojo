@@ -84,6 +84,18 @@ export async function checkCompliance(
 
     // --- Check Contract Elements ---
     for (const elem of contract.elements) {
+      // Skip conditionally-visible elements: contract explicitly marks these
+      // with assert: conditional + visible_when, meaning they should NOT be
+      // present on initial render. Flagging them as "missing" would punish
+      // the model for correctly following the contract. A future pass can
+      // walk user-flows to trigger visible_when and verify presence there;
+      // for now, honor the contract's conditional marker and skip.
+      const assertField = Array.isArray(elem.assert) ? elem.assert : [elem.assert];
+      if (assertField.includes("conditional")) {
+        result.totalElements--; // do not count toward pass/fail denominator
+        continue;
+      }
+
       const selector = `[data-testid="${elem.testid}"]`;
       const domElement = await page.$(selector);
 

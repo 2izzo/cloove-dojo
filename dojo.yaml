@@ -1,26 +1,19 @@
-# Cloove Dojo — Global Configuration
 version: 0.2.0
-
 models:
-  primary: qwen3-coder-next:latest
-  alternate: devstral-dojo:latest
-
+  primary: devstral-dojo:latest
+  alternate: mistral-small3.1:24b-instruct-2503-q4_K_M
 defaults:
   runs_per_prompt: 10
   timeout_minutes: 15
   max_cycles: 10
   language: typescript
-
-# Harness: direct Ollama. See runner/config.yaml for base_url + defaults.
 harness:
   type: ollama
-
 paths:
   katas: ./katas
   prompts: ./prompts
   results: ./results
   reports: ./reports
-
 server:
   port: 20158
-  host: "0.0.0.0"
+  host: 0.0.0.0

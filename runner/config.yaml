@@ -1,13 +1,11 @@
 models:
-  devstral: devstral-dojo:latest
-  qwen3-coder: qwen3-coder-next:latest
-
+  primary: devstral-dojo:latest
+  mistral-small: mistral-small3.1:24b-instruct-2503-q4_K_M
 ollama:
   base_url: http://localhost:11434
-  default_model: qwen3-coder-next:latest
+  default_model: devstral-dojo:latest
   temperature: 0.2
   num_predict: 8192
-
 defaults:
   runs: 10
   timeout_minutes: 15
