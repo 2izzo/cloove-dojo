@@ -143,10 +143,11 @@ function parseVitestSummary(out: string): { passing: number; failing: number; fi
   return { passing, failing, filesFailed };
 }
 
-function runTests(workspace: string): { passed: boolean; total: number; passing: number; output: string } {
+function runTests(workspace: string, testPath: string = ""): { passed: boolean; total: number; passing: number; output: string } {
   let output = "";
+  const vitestArgs = testPath ? `run ${testPath}` : "run";
   try {
-    output = execSync("./node_modules/.bin/vitest run --reporter=verbose 2>&1", {
+    output = execSync(`./node_modules/.bin/vitest ${vitestArgs} --reporter=verbose 2>&1`, {
       cwd: workspace,
       timeout: 60000,
       encoding: "utf-8",
@@ -241,7 +242,10 @@ async function main() {
     console.log(`  Ollama exit: ${ollamaResult.exitCode} (${ollamaResult.elapsedSeconds.toFixed(1)}s${ollamaResult.timedOut ? " TIMEOUT" : ""})`);
 
     // Run tests
-    const testResult = runTests(workspace);
+    const testResult = runTests(
+      workspace,
+      ringConfig.provides.includes("tests") ? "tests" : ""
+    );
     console.log(`  Tests: ${testResult.passing}/${testResult.total} passing${testResult.passed ? " ✓" : " ✗"}`);
 
     // Parse completion status from model output
