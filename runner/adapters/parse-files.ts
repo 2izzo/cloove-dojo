@@ -1,19 +1,33 @@
 /**
  * Parse file writes out of a model response.
  *
- * Primary format (driven by the harness's system prompt):
+ * Reality of model output (captured 2026-04-24): models routinely wrap
+ * file bodies in markdown code fences and skip the explicit ===END===
+ * marker. We accept three shapes:
  *
- *   ===FILE: <relative/path>===
- *   <raw file content>
- *   ===END===
+ *   A) Canonical:
+ *      ===FILE: path===
+ *      <body>
+ *      ===END===
  *
- * Fallback (defensive — model ignored the system prompt):
- *   If no ===FILE: markers are found AND the caller passed a single expected
- *   filename via `expectedSingleFile`, treat the first fenced code block as
- *   that file's content and emit a warning.
+ *   B) Marker-opened, fence-terminated (qwen3's habit):
+ *      ===FILE: path===
+ *      ```lang
+ *      <body>
+ *      ```
+ *      (no ===END===)
  *
- * Everything here is pure: no I/O, no side effects. That's the point —
- * correctness is gated by unit tests against captured real-model fixtures.
+ *   C) Fence-only with caller-provided filename hint (defensive fallback):
+ *      ```lang
+ *      <body>
+ *      ```
+ *
+ * For shape A, if the extracted body is itself a single wrapping code
+ * fence (```lang\n...\n```), we strip it — that's the model being extra
+ * "helpful" with nested fences and should not end up in the file.
+ *
+ * All parsing is pure (no I/O). Correctness is gated by unit tests against
+ * captured real-model fixtures.
  */
 
 export interface ExtractedFile {
@@ -28,18 +42,37 @@ export interface ParseResult {
 
 export interface ParseOptions {
   /**
-   * Single-file fallback hint. When set and no ===FILE: markers are present,
-   * the first fenced code block in the response is treated as this file.
-   * Leave undefined for strict (marker-only) parsing.
+   * Single-file fallback hint. When set and no ===FILE: markers are
+   * present, the first fenced code block is treated as this file.
    */
   expectedSingleFile?: string;
 }
 
-/** Match ===FILE: path===\n<body>\n===END=== greedily-but-lazily. */
-const FILE_MARKER_RE = /===FILE:\s*(.+?)\s*===\s*\r?\n([\s\S]*?)\r?\n===END===/g;
+/** Shape A — canonical, with explicit ===END=== closer. */
+const SHAPE_A_RE =
+  /===FILE:\s*(.+?)\s*===\s*\r?\n([\s\S]*?)\r?\n===END===/g;
 
-/** Match a markdown code fence, optional language tag. */
-const FENCE_RE = /```(?:[\w.-]*)\r?\n([\s\S]*?)\r?\n```/;
+/**
+ * Shape B — ===FILE: opener, closed by a markdown fence. Requires the body
+ * to start (after optional whitespace) with a fence, and terminates at the
+ * matching closing fence. Non-greedy on body so multiple B-blocks in a
+ * single response don't swallow each other.
+ */
+const SHAPE_B_RE =
+  /===FILE:\s*(.+?)\s*===\s*\r?\n\s*```(?:[\w.+-]*)\r?\n([\s\S]*?)\r?\n\s*```/g;
+
+/** Fallback — first fenced block anywhere in the content. */
+const FIRST_FENCE_RE = /```(?:[\w.+-]*)\r?\n([\s\S]*?)\r?\n```/;
+
+/**
+ * If a body is wholly wrapped in a single markdown fence (```lang\n...\n```),
+ * unwrap it. This is defensive — some models put fences inside ===FILE:
+ * blocks "for clarity" even when told not to.
+ */
+function stripWrappingFence(body: string): string {
+  const m = body.match(/^\s*```(?:[\w.+-]*)\r?\n([\s\S]*?)\r?\n```\s*$/);
+  return m ? m[1] : body;
+}
 
 export function parseFiles(
   content: string,
@@ -47,26 +80,55 @@ export function parseFiles(
 ): ParseResult {
   const files: ExtractedFile[] = [];
   const warnings: string[] = [];
+  const claimed: Array<[number, number]> = []; // [start, end) spans already consumed
 
-  // Primary pass: collect all ===FILE: blocks.
-  for (const match of content.matchAll(FILE_MARKER_RE)) {
-    const rawPath = match[1];
-    const body = match[2];
-    const err = validatePath(rawPath);
+  const overlaps = (s: number, e: number) =>
+    claimed.some(([cs, ce]) => s < ce && cs < e);
+
+  // Pass 1: canonical ===END===-closed blocks.
+  for (const m of content.matchAll(SHAPE_A_RE)) {
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    if (overlaps(start, end)) continue;
+    const path = m[1];
+    const body = stripWrappingFence(m[2]);
+    const err = validatePath(path);
     if (err) {
-      warnings.push(`skipped unsafe path "${rawPath}": ${err}`);
+      warnings.push(`skipped unsafe path "${path}": ${err}`);
       continue;
     }
-    files.push({ path: rawPath, content: body });
+    files.push({ path, content: body });
+    claimed.push([start, end]);
+  }
+
+  // Pass 2: marker-opened, fence-terminated (no ===END===).
+  for (const m of content.matchAll(SHAPE_B_RE)) {
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    if (overlaps(start, end)) continue;
+    const path = m[1];
+    const body = m[2];
+    const err = validatePath(path);
+    if (err) {
+      warnings.push(`skipped unsafe path "${path}": ${err}`);
+      continue;
+    }
+    files.push({ path, content: body });
+    claimed.push([start, end]);
+    warnings.push(
+      `shape B: ===FILE: "${path}" was closed by a code fence, not ===END===`
+    );
   }
 
   if (files.length > 0) {
+    // Sort by file-order in the source, so multi-file outputs retain order
+    files.sort((a, b) => content.indexOf(a.content) - content.indexOf(b.content));
     return { files, warnings };
   }
 
-  // Fallback: single fenced block, with caller hint.
+  // Pass 3: single-fence fallback with caller hint.
   if (opts.expectedSingleFile) {
-    const fence = content.match(FENCE_RE);
+    const fence = content.match(FIRST_FENCE_RE);
     if (fence) {
       const err = validatePath(opts.expectedSingleFile);
       if (err) {
@@ -76,7 +138,7 @@ export function parseFiles(
       } else {
         files.push({ path: opts.expectedSingleFile, content: fence[1] });
         warnings.push(
-          `fallback: no ===FILE: markers found; extracted first fenced block as ${opts.expectedSingleFile}`
+          `fallback: no markers found; extracted first fenced block as ${opts.expectedSingleFile}`
         );
       }
     } else {
@@ -95,7 +157,6 @@ export function parseFiles(
 
 /**
  * Reject paths that could escape the workspace or otherwise be unsafe.
- * Applied to both parsed ===FILE: paths and fallback hints.
  */
 function validatePath(p: string): string | null {
   if (!p || !p.trim()) return "empty path";

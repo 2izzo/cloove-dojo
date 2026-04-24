@@ -73,11 +73,13 @@ function createWorkspace(kataName: string, ring: number, kataDir: string, provid
   const ws = join(tmpdir(), `dojo-${kataName}-ring${ring}-${Date.now()}`);
   mkdirSync(ws, { recursive: true });
 
-  // Copy test files if provided
+  // Copy test files if provided — preserve tests/ subdir so ../impl imports resolve
   if (provides.includes("tests") && existsSync(join(kataDir, "tests"))) {
     const testsDir = join(kataDir, "tests");
+    const wsTestsDir = join(ws, "tests");
+    mkdirSync(wsTestsDir, { recursive: true });
     readdirSync(testsDir).forEach((f) => {
-      cpSync(join(testsDir, f), join(ws, f));
+      cpSync(join(testsDir, f), join(wsTestsDir, f));
     });
   }
 
@@ -88,6 +90,17 @@ function createWorkspace(kataName: string, ring: number, kataDir: string, provid
       cpSync(join(legacyDir, f), join(ws, f));
     });
   }
+
+  // Symlink node_modules from dojo root so vitest+typescript are available
+  // without a per-workspace install. Cheaper than bun install per run.
+  const dojoRoot = resolve(import.meta.dir, "..");
+  try {
+    require("fs").symlinkSync(
+      join(dojoRoot, "node_modules"),
+      join(ws, "node_modules"),
+      "dir"
+    );
+  } catch {}
 
   // Write a minimal package.json for vitest
   writeFileSync(
@@ -106,26 +119,45 @@ function createWorkspace(kataName: string, ring: number, kataDir: string, provid
 }
 
 // --- Run tests in workspace ---
+// Parses vitest summary lines specifically. Model-written console.log can emit
+// strings like "23 passed" that would poison a loose /(\d+) passed/ regex.
+// Vitest summary format:
+//   Test Files  1 passed (1)
+//   Test Files  1 failed | 4 passed (5)
+//        Tests  7 passed (7)
+//        Tests  5 failed | 13 passed (18)
+function parseVitestSummary(out: string): { passing: number; failing: number; filesFailed: number } {
+  let passing = 0, failing = 0, filesFailed = 0;
+  const lines = out.split(/\r?\n/);
+  for (const ln of lines) {
+    const trimmed = ln.trim();
+    const mFiles = /^Test Files\s+(?:(\d+)\s+failed\s*\|\s*)?(\d+)?\s*passed?\s*\((\d+)\)/i.exec(trimmed);
+    if (mFiles) { if (mFiles[1]) filesFailed = parseInt(mFiles[1]); continue; }
+    const mFilesFailOnly = /^Test Files\s+(\d+)\s+failed\s*\((\d+)\)/i.exec(trimmed);
+    if (mFilesFailOnly) { filesFailed = parseInt(mFilesFailOnly[1]); continue; }
+    const mTests = /^Tests\s+(?:(\d+)\s+failed\s*\|\s*)?(\d+)\s+passed\s*\(\d+\)/i.exec(trimmed);
+    if (mTests) { if (mTests[1]) failing = parseInt(mTests[1]); passing = parseInt(mTests[2]); continue; }
+    const mTestsFailOnly = /^Tests\s+(\d+)\s+failed\s*\(\d+\)/i.exec(trimmed);
+    if (mTestsFailOnly) { failing = parseInt(mTestsFailOnly[1]); continue; }
+  }
+  return { passing, failing, filesFailed };
+}
+
 function runTests(workspace: string): { passed: boolean; total: number; passing: number; output: string } {
+  let output = "";
   try {
-    const output = execSync("bunx vitest run --reporter=verbose 2>&1", {
+    output = execSync("./node_modules/.bin/vitest run --reporter=verbose 2>&1", {
       cwd: workspace,
       timeout: 60000,
       encoding: "utf-8",
     });
-    const passMatch = output.match(/(\d+) passed/);
-    const failMatch = output.match(/(\d+) failed/);
-    const passing = passMatch ? parseInt(passMatch[1]) : 0;
-    const failed = failMatch ? parseInt(failMatch[1]) : 0;
-    return { passed: failed === 0 && passing > 0, total: passing + failed, passing, output };
   } catch (e: any) {
-    const output = e.stdout || e.message || "";
-    const passMatch = output.match(/(\d+) passed/);
-    const failMatch = output.match(/(\d+) failed/);
-    const passing = passMatch ? parseInt(passMatch[1]) : 0;
-    const failed = failMatch ? parseInt(failMatch[1]) : 0;
-    return { passed: false, total: passing + failed, passing, output };
+    output = e.stdout || e.message || "";
   }
+  const s = parseVitestSummary(output);
+  const total = s.passing + s.failing;
+  const passed = s.failing === 0 && s.filesFailed === 0 && s.passing > 0;
+  return { passed, total, passing: s.passing, output };
 }
 
 // --- Main ---

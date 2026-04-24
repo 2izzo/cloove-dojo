@@ -8,12 +8,12 @@ You never skip the red-green-refactor cycle.
 
 {{description}}
 
-{{#if architecture}}
+{{#architecture}}
 ## Architecture (follow this structure)
 {{architecture}}
-{{/if}}
+{{/architecture}}
 
-{{#if tests}}
+{{#tests}}
 ## Provided Tests (DO NOT modify these)
 
 These tests define correct behavior. Your implementation must pass ALL of them.
@@ -22,7 +22,8 @@ These tests define correct behavior. Your implementation must pass ALL of them.
 {{tests}}
 ```
 
-{{else}}
+{{/tests}}
+{{^tests}}
 ## Write Tests First
 
 Before writing any implementation code, write a comprehensive test suite that
@@ -33,7 +34,7 @@ covers:
 - The specific examples in the problem description
 
 Use vitest. Place tests in a `.test.ts` file alongside the implementation.
-{{/if}}
+{{/tests}}
 
 # Process — Red Green Refactor
 

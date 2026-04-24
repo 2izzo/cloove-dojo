@@ -174,3 +174,90 @@ describe("parseFiles — against real captured model fixtures", () => {
     }
   });
 });
+
+describe("parseFiles — shape B (marker-opened, fence-terminated, no ===END===)", () => {
+  it("extracts a marker-opened fence-terminated block", () => {
+    const input = [
+      "===FILE: bowling.ts===",
+      "```typescript",
+      "export class Game {",
+      "  roll(p: number) {}",
+      "}",
+      "```",
+    ].join("\n");
+    const result = parseFiles(input);
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0].path).toBe("bowling.ts");
+    expect(result.files[0].content).toContain("export class Game");
+    expect(result.files[0].content).not.toContain("```");
+    expect(result.warnings.some((w) => w.includes("shape B"))).toBe(true);
+  });
+
+  it("handles two shape-B blocks back to back", () => {
+    const input = [
+      "===FILE: src/a.ts===",
+      "```ts",
+      "export const a = 1;",
+      "```",
+      "",
+      "===FILE: src/b.ts===",
+      "```ts",
+      "export const b = 2;",
+      "```",
+    ].join("\n");
+    const result = parseFiles(input);
+    expect(result.files.map((f) => f.path)).toEqual(["src/a.ts", "src/b.ts"]);
+    expect(result.files[0].content).toBe("export const a = 1;");
+    expect(result.files[1].content).toBe("export const b = 2;");
+  });
+
+  it("prefers shape A over shape B when both could match", () => {
+    // A-block for foo.ts, B-block for bar.ts — both extracted, neither misassigned
+    const input = [
+      "===FILE: foo.ts===",
+      "export const foo = 1;",
+      "===END===",
+      "",
+      "===FILE: bar.ts===",
+      "```ts",
+      "export const bar = 2;",
+      "```",
+    ].join("\n");
+    const result = parseFiles(input);
+    expect(result.files.map((f) => f.path)).toEqual(["foo.ts", "bar.ts"]);
+    expect(result.files[0].content).toBe("export const foo = 1;");
+    expect(result.files[1].content).toBe("export const bar = 2;");
+  });
+});
+
+describe("parseFiles — wrapping-fence strip inside shape A", () => {
+  it("strips a single wrapping ```lang fence inside an ===END===-closed block", () => {
+    const input = [
+      "===FILE: bowling.ts===",
+      "```typescript",
+      "export class Game {}",
+      "```",
+      "===END===",
+    ].join("\n");
+    const result = parseFiles(input);
+    expect(result.files[0].content).toBe("export class Game {}");
+    expect(result.files[0].content).not.toContain("```");
+  });
+
+  it("leaves non-wrapping fences alone (fence in the middle of content)", () => {
+    const input = [
+      "===FILE: README.md===",
+      "# Docs",
+      "```ts",
+      "example();",
+      "```",
+      "More docs.",
+      "===END===",
+    ].join("\n");
+    const result = parseFiles(input);
+    expect(result.files[0].content).toContain("# Docs");
+    expect(result.files[0].content).toContain("```ts");
+    expect(result.files[0].content).toContain("example();");
+    expect(result.files[0].content).toContain("More docs.");
+  });
+});
