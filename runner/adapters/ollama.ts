@@ -47,6 +47,14 @@ export interface FireOllamaOptions {
    * but the kata expects a single file, use this name for fallback parse.
    */
   expectedSingleFile?: string;
+
+  /**
+   * Temperature override for this call. Falls back to ollama.temperature
+   * in runner/config.yaml, which falls back to 0.2. Set to 0 for fully
+   * greedy/deterministic output (backend katas); leave higher for fullstack
+   * where some creative latitude in component design helps.
+   */
+  temperature?: number;
 }
 
 function loadConfig(): OllamaConfig {
@@ -74,6 +82,8 @@ Rules:
 - Prose is allowed BEFORE the first block or AFTER the last block, never between markers.
 - When tests are provided, your implementation MUST export every symbol the tests import. If the test does a named import of a class, export that class (export keyword required).
 - When tests are provided, do NOT write any new test files. Only implement the source files needed to make the provided tests pass. The provided tests ARE the contract.
+- When any test uses expect(...).toThrow() or .rejects.toThrow(), your implementation MUST raise on exactly those inputs. "throws on invalid input" is a hard constraint, not optional. Validate input strictly and throw on any form the tests flag as invalid.
+- Throwing on invalid input means more than type/range checks. If a test expects a throw on a value that would otherwise pass loose validation (e.g., a well-formed string that does not match the format spec), you must validate the STRUCTURE of the input (regex, whitelist, grammar check) and throw on any form the problem domain does not permit. Read each test case in the "throws on invalid input" set and make sure your validation rejects ALL of them, not just the obvious ones.
 - End your entire response with a single final line: **STATUS:** DONE`;
 
 export async function fireOllama(
@@ -113,7 +123,7 @@ export async function fireOllama(
           { role: "user", content: prompt },
         ],
         options: {
-          temperature: config.temperature ?? 0.2,
+          temperature: options.temperature ?? config.temperature ?? 0.2,
           num_predict: config.num_predict ?? 8192,
         },
       }),

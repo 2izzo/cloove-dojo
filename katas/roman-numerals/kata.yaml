@@ -1,35 +1,53 @@
 name: roman-numerals
 language: typescript
 difficulty: beginner
-source: "Classic TDD kata"
+source: Classic TDD kata
 description_file: description.md
 architecture_file: architecture.md
-
 rings:
   1:
-    label: "Full training wheels"
-    provides: [description, architecture, tests]
-    agent_task: "Implement toRoman() and fromRoman() that pass all tests"
+    label: Full training wheels
+    provides:
+    - description
+    - architecture
+    - tests
+    agent_task: Implement toRoman() and fromRoman() that pass all tests
   2:
-    label: "Write your own tests"
-    provides: [description, architecture]
-    agent_task: "Write comprehensive tests, then implement both functions"
+    label: Write your own tests
+    provides:
+    - description
+    - architecture
+    agent_task: Write comprehensive tests, then implement both functions
   3:
-    label: "Design it yourself"
-    provides: [description]
-    agent_task: "Design the module, write tests, implement"
+    label: Design it yourself
+    provides:
+    - description
+    agent_task: Design the module, write tests, implement
   4:
-    label: "From intent only"
-    provides: [ticket]
-    agent_task: "Read the user story, design, test, implement"
-
+    label: From intent only
+    provides:
+    - ticket
+    agent_task: Read the user story, design, test, implement
 scoring:
-  tests_pass: { weight: 40, type: binary }
-  test_quality: { weight: 15, type: coverage }
-  code_quality: { weight: 15, type: lint_score }
-  cycles: { weight: 10, type: inverse_linear }
-  solution_similarity: { weight: 10, type: structural }
-  time: { weight: 10, type: inverse_linear }
-
+  tests_pass:
+    weight: 40
+    type: binary
+  test_quality:
+    weight: 15
+    type: coverage
+  code_quality:
+    weight: 15
+    type: lint_score
+  cycles:
+    weight: 10
+    type: inverse_linear
+  solution_similarity:
+    weight: 10
+    type: structural
+  time:
+    weight: 10
+    type: inverse_linear
 max_cycles: 10
 timeout_minutes: 10
+harness:
+  temperature: 0.0

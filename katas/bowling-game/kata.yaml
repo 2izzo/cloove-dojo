@@ -1,34 +1,52 @@
 name: bowling-game
 language: typescript
 difficulty: beginner
-source: "Uncle Bob's Bowling Game kata"
-description: "Calculate the score of a ten-pin bowling game"
-
+source: Uncle Bob's Bowling Game kata
+description: Calculate the score of a ten-pin bowling game
 rings:
   1:
-    label: "Full training wheels"
-    provides: [description, architecture, tests]
-    agent_task: "Implement the Game class that makes all provided tests pass"
+    label: Full training wheels
+    provides:
+    - description
+    - architecture
+    - tests
+    agent_task: Implement the Game class that makes all provided tests pass
   2:
-    label: "Write your own tests"
-    provides: [description, architecture]
-    agent_task: "Write comprehensive tests first, then implement to pass them"
+    label: Write your own tests
+    provides:
+    - description
+    - architecture
+    agent_task: Write comprehensive tests first, then implement to pass them
   3:
-    label: "Design it yourself"
-    provides: [description]
-    agent_task: "Design architecture, write tests, implement"
+    label: Design it yourself
+    provides:
+    - description
+    agent_task: Design architecture, write tests, implement
   4:
-    label: "From intent only"
-    provides: [ticket]
-    agent_task: "Read the user story, design everything, implement and verify"
-
+    label: From intent only
+    provides:
+    - ticket
+    agent_task: Read the user story, design everything, implement and verify
 scoring:
-  tests_pass: { weight: 40, type: binary }
-  test_quality: { weight: 15, type: coverage }
-  code_quality: { weight: 15, type: lint_score }
-  cycles: { weight: 10, type: inverse_linear }
-  solution_similarity: { weight: 10, type: structural }
-  time: { weight: 10, type: inverse_linear }
-
+  tests_pass:
+    weight: 40
+    type: binary
+  test_quality:
+    weight: 15
+    type: coverage
+  code_quality:
+    weight: 15
+    type: lint_score
+  cycles:
+    weight: 10
+    type: inverse_linear
+  solution_similarity:
+    weight: 10
+    type: structural
+  time:
+    weight: 10
+    type: inverse_linear
 max_cycles: 10
 timeout_minutes: 15
+harness:
+  temperature: 0.0

@@ -19,6 +19,7 @@ export interface FullstackKataOptions {
   workspaceDir: string; // Where to create workspace for this run
   dojoRoot?: string; // Root of dojo directory (inferred if not given)
   model?: string; // Optional model override (passed to fireOllama)
+  temperature?: number; // Optional temperature override for fireOllama
 }
 
 export interface FullstackRunResult {
@@ -151,7 +152,8 @@ export async function runFullstackKata(
         workspaceDir,
         contract,
         dojoRoot,
-        opts.model
+        opts.model,
+        opts.temperature
       );
       result.phases.dev = devResult;
       if (!devResult.success) {
@@ -243,7 +245,8 @@ export async function runFullstackKata(
           workspaceDir,
           contract,
           dojoRoot,
-          opts.model
+          opts.model,
+          opts.temperature
         );
         result.phases.sdet = sdetResult;
         if (!sdetResult.success) {
@@ -416,7 +419,8 @@ async function fireDevCloove(
   workspaceDir: string,
   contract: Contract,
   dojoRoot: string,
-  model?: string
+  model?: string,
+  temperature?: number
 ): Promise<PhaseResult> {
   try {
     const promptPath = join(dojoRoot, "prompts", "fullstack-dev-v1", "implement.md");
@@ -462,7 +466,8 @@ async function fireDevCloove(
       renderedPrompt,
       workspaceDir,
       10, // 10 minutes for dev
-      model
+      model,
+      temperature !== undefined ? { temperature } : undefined
     );
 
     if (ollamaResult.exitCode !== 0 || ollamaResult.timedOut) {
@@ -499,7 +504,8 @@ async function fireSdetCloove(
   workspaceDir: string,
   contract: Contract,
   dojoRoot: string,
-  model?: string
+  model?: string,
+  temperature?: number
 ): Promise<PhaseResult> {
   try {
     const promptPath = join(dojoRoot, "prompts", "sdet-v1", "implement.md");
@@ -532,7 +538,8 @@ async function fireSdetCloove(
       renderedPrompt,
       workspaceDir,
       10, // 10 minutes for SDET
-      model
+      model,
+      temperature !== undefined ? { temperature } : undefined
     );
 
     if (ollamaResult.exitCode !== 0 || ollamaResult.timedOut) {

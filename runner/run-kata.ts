@@ -189,6 +189,7 @@ async function main() {
         workspaceDir: workspace,
         dojoRoot: DOJO_ROOT,
         model,
+        temperature: kataYaml?.harness?.temperature,
       });
 
       console.log(`  Scaffold: ${fsResult.phases.scaffold.success ? "✓" : "✗"}`);
@@ -232,12 +233,14 @@ async function main() {
     const workspace = createWorkspace(kata, ring, kataDir, ringConfig.provides);
     console.log(`  Workspace: ${workspace}`);
 
-    // Fire Ollama
+    // Fire Ollama — honor kata.yaml harness.temperature override if set
+    const kataHarnessTemp = kataYaml?.harness?.temperature;
     const ollamaResult = await fireOllama(
       renderedPrompt,
       workspace,
       kataYaml.timeout_minutes || 15,
-      model || dojoConfig.models.primary
+      model || dojoConfig.models.primary,
+      kataHarnessTemp !== undefined ? { temperature: kataHarnessTemp } : undefined
     );
 
     console.log(`  Ollama exit: ${ollamaResult.exitCode} (${ollamaResult.elapsedSeconds.toFixed(1)}s${ollamaResult.timedOut ? " TIMEOUT" : ""})`);

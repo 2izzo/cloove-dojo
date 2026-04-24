@@ -3,21 +3,34 @@ type: fullstack
 language: typescript
 framework: vue3
 difficulty: intermediate
-source: "Classic TodoMVC pattern — full-stack agent eval"
-description: "Build a Vue 3 + TypeScript todo application against a contract"
-
+source: "Classic TodoMVC pattern \u2014 full-stack agent eval"
+description: Build a Vue 3 + TypeScript todo application against a contract
 rings:
   1:
-    label: "Contract + Architecture"
-    provides: [description, architecture, contract]
-    agent_task: "Implement the app to match the contract exactly; SDET phase verifies via Puppeteer"
-
+    label: Contract + Architecture
+    provides:
+    - description
+    - architecture
+    - contract
+    agent_task: Implement the app to match the contract exactly; SDET phase verifies
+      via Puppeteer
 scoring:
-  semantic_compliance: { weight: 20, type: binary }
-  testid_compliance: { weight: 30, type: percent_matched }
-  user_flows_passing: { weight: 30, type: percent_passing }
-  code_quality: { weight: 10, type: lint_score }
-  time: { weight: 10, type: inverse_linear }
-
+  semantic_compliance:
+    weight: 20
+    type: binary
+  testid_compliance:
+    weight: 30
+    type: percent_matched
+  user_flows_passing:
+    weight: 30
+    type: percent_passing
+  code_quality:
+    weight: 10
+    type: lint_score
+  time:
+    weight: 10
+    type: inverse_linear
 max_cycles: 10
 timeout_minutes: 15
+harness:
+  temperature: 0.2

@@ -100,6 +100,54 @@ When the contract specifies a pattern like `testid_pattern: todo-item-{index}`, 
 
 Rule of thumb: only the token that appears inside braces in `testid_pattern` gets templated. Look up the pattern in the contract. If it says `todo-item-{index}`, only the OUTER `todo-item-` testid is templated — every inner `item-text`, `item-toggle`, `item-delete` is a literal testid string unless the contract explicitly templates them too.
 
+**CRITICAL — Child components interacting with parent state MUST emit events.**
+
+Child components (e.g., `TodoItem`) must NEVER define local handler functions that mutate todo data directly. If the parent owns the todos array (and it always does for this kata), the child can only request changes by emitting events. The parent binds listeners that do the actual mutation.
+
+**Correct — child emits, parent handles:**
+```vue
+<!-- TodoItem.vue (child) -->
+<template>
+  <li :data-testid="`todo-item-${index}`">
+    <input data-testid="item-toggle" type="checkbox"
+      :checked="todo.completed"
+      @change="emit('toggle', todo.id)" />
+    <span data-testid="item-text">{{ todo.text }}</span>
+    <button data-testid="item-delete" @click="emit('delete', todo.id)">Delete</button>
+  </li>
+</template>
+<script setup lang="ts">
+defineProps<{ todo: { id: number; text: string; completed: boolean }, index: number }>();
+const emit = defineEmits<{ (e: 'toggle', id: number): void; (e: 'delete', id: number): void }>();
+</script>
+```
+
+**Parent listens and mutates its own state:**
+```vue
+<!-- TodoList.vue or App.vue (parent) -->
+<TodoItem
+  v-for="(todo, index) in todos"
+  :key="todo.id"
+  :todo="todo"
+  :index="index"
+  @toggle="onToggle"
+  @delete="onDelete"
+/>
+```
+
+**Wrong — DO NOT do any of these in a child component:**
+```vue
+<!-- WRONG: local handler that tries to mutate parent state via prop -->
+<input @change="toggleTodo" />
+<!-- where toggleTodo flips props.todo.completed; Vue warns and parent never re-renders counts correctly -->
+
+<!-- WRONG: child owning its own copy of completed state -->
+<input v-model="localCompleted" />
+<!-- now child and parent state diverge; active count goes stale -->
+```
+
+Getting this wrong makes the checkbox *appear* to toggle (Vue's local reactivity on the checked attribute fires) but the parent's todos array doesn't update, so `active-count` stays stale and `todo-item` doesn't gain the `completed` class. The blind E2E oracle catches this every time.
+
 ### Step 3: Semantic HTML Structure
 
 Use the semantic HTML elements the contract requires:
