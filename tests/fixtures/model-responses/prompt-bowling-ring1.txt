@@ -1,0 +1,128 @@
+You are given a coding kata. Read the description, architecture hints, and the test file. Implement the solution.
+
+=== description.md ===
+# Bowling Game
+
+Create a program that calculates the score of a ten-pin bowling game.
+
+## Rules
+
+- A game consists of 10 frames
+- In each frame, the player has two rolls to knock down all 10 pins
+- **Spare:** If the player knocks down all 10 pins in two rolls, the bonus for that frame is the number of pins knocked down on the next roll
+- **Strike:** If the player knocks down all 10 pins on the first roll, the frame is over and the bonus is the value of the next two rolls
+- **10th frame:** The player who rolls a spare or strike in the 10th frame gets to roll extra balls to complete the frame, but no more than 3 rolls total
+
+## Interface
+
+Implement a `Game` class with:
+- `roll(pins: number): void` — called each time the player rolls a ball
+- `score(): number` — called at the end of the game, returns the total score
+
+## Examples
+
+| Scenario | Rolls | Score |
+|----------|-------|-------|
+| Gutter game | 20 rolls of 0 | 0 |
+| All ones | 20 rolls of 1 | 20 |
+| One spare | 5, 5, 3, then 17 rolls of 0 | 16 |
+| One strike | 10, 3, 4, then 16 rolls of 0 | 24 |
+| Perfect game | 12 rolls of 10 | 300 |
+
+=== architecture.md ===
+# Architecture: Bowling Game
+
+## File Structure
+
+```
+bowling.ts       — Game class implementation
+bowling.test.ts  — Tests (provided in Ring 1, you write in Ring 2+)
+```
+
+## Design Hints
+
+- Store rolls in an array, calculate score by walking frames
+- Track a `rollIndex` that advances through the rolls array
+- A frame is a strike if the first roll is 10
+- A frame is a spare if the two rolls sum to 10
+- The score for a frame includes its bonus rolls
+- Don't try to calculate score roll-by-roll — calculate frame-by-frame at the end
+
+=== tests/bowling.test.ts ===
+import { describe, it, expect, beforeEach } from 'vitest';
+import { Game } from '../bowling';
+
+describe('Bowling Game', () => {
+  let game: Game;
+
+  beforeEach(() => {
+    game = new Game();
+  });
+
+  function rollMany(pins: number, times: number) {
+    for (let i = 0; i < times; i++) {
+      game.roll(pins);
+    }
+  }
+
+  function rollSpare() {
+    game.roll(5);
+    game.roll(5);
+  }
+
+  function rollStrike() {
+    game.roll(10);
+  }
+
+  it('scores a gutter game as 0', () => {
+    rollMany(0, 20);
+    expect(game.score()).toBe(0);
+  });
+
+  it('scores all ones as 20', () => {
+    rollMany(1, 20);
+    expect(game.score()).toBe(20);
+  });
+
+  it('scores a spare correctly', () => {
+    rollSpare();
+    game.roll(3);
+    rollMany(0, 17);
+    expect(game.score()).toBe(16);
+  });
+
+  it('scores a strike correctly', () => {
+    rollStrike();
+    game.roll(3);
+    game.roll(4);
+    rollMany(0, 16);
+    expect(game.score()).toBe(24);
+  });
+
+  it('scores a perfect game as 300', () => {
+    rollMany(10, 12);
+    expect(game.score()).toBe(300);
+  });
+
+  it('scores all spares correctly', () => {
+    for (let i = 0; i < 10; i++) {
+      rollSpare();
+    }
+    game.roll(5);
+    expect(game.score()).toBe(150);
+  });
+
+  it('handles mixed game', () => {
+    rollStrike();
+    game.roll(7);
+    game.roll(2);
+    game.roll(3);
+    game.roll(7);
+    game.roll(4);
+    game.roll(2);
+    rollMany(0, 12);
+    expect(game.score()).toBe(48);
+  });
+});
+
+Implement bowling.ts so that bowling.test.ts passes. Output the complete file content.

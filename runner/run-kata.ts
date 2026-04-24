@@ -11,7 +11,7 @@ import { execSync } from "child_process";
 import { tmpdir } from "os";
 import YAML from "yaml";
 import Mustache from "mustache";
-import { fireCline } from "./adapters/cline";
+import { fireOllama } from "./adapters/ollama";
 import { runFullstackKata } from "./run-fullstack";
 
 const DOJO_ROOT = resolve(import.meta.dir, "..");
@@ -198,23 +198,23 @@ async function main() {
     const workspace = createWorkspace(kata, ring, kataDir, ringConfig.provides);
     console.log(`  Workspace: ${workspace}`);
 
-    // Fire Cline
-    const clineResult = await fireCline(
+    // Fire Ollama
+    const ollamaResult = await fireOllama(
       renderedPrompt,
       workspace,
       kataYaml.timeout_minutes || 15,
       model || dojoConfig.models.primary
     );
 
-    console.log(`  Cline exit: ${clineResult.exitCode} (${clineResult.elapsedSeconds.toFixed(1)}s${clineResult.timedOut ? " TIMEOUT" : ""})`);
+    console.log(`  Ollama exit: ${ollamaResult.exitCode} (${ollamaResult.elapsedSeconds.toFixed(1)}s${ollamaResult.timedOut ? " TIMEOUT" : ""})`);
 
     // Run tests
     const testResult = runTests(workspace);
     console.log(`  Tests: ${testResult.passing}/${testResult.total} passing${testResult.passed ? " ✓" : " ✗"}`);
 
-    // Parse completion status from Cline output
-    const statusMatch = clineResult.stdout.match(/\*\*STATUS:\*\*\s*(DONE|DONE_WITH_CONCERNS|BLOCKED)/);
-    const cyclesMatch = clineResult.stdout.match(/\*\*CYCLES:\*\*\s*(\d+)/);
+    // Parse completion status from model output
+    const statusMatch = ollamaResult.stdout.match(/\*\*STATUS:\*\*\s*(DONE|DONE_WITH_CONCERNS|BLOCKED)/);
+    const cyclesMatch = ollamaResult.stdout.match(/\*\*CYCLES:\*\*\s*(\d+)/);
 
     const result = {
       kata,
@@ -226,10 +226,10 @@ async function main() {
       tests_total: testResult.total,
       tests_passing: testResult.passing,
       cycles: cyclesMatch ? parseInt(cyclesMatch[1]) : -1,
-      time_seconds: clineResult.elapsedSeconds,
-      timed_out: clineResult.timedOut,
-      exit_code: clineResult.exitCode,
-      status: statusMatch ? statusMatch[1] : (clineResult.timedOut ? "TIMEOUT" : "UNKNOWN"),
+      time_seconds: ollamaResult.elapsedSeconds,
+      timed_out: ollamaResult.timedOut,
+      exit_code: ollamaResult.exitCode,
+      status: statusMatch ? statusMatch[1] : (ollamaResult.timedOut ? "TIMEOUT" : "UNKNOWN"),
       workspace,
       timestamp: new Date().toISOString(),
     };

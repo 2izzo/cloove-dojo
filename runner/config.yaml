@@ -1,10 +1,12 @@
 models:
-  devstral: devstral:24b-small-2505-q4_K_M
+  devstral: devstral-dojo:latest
   qwen3-coder: qwen3-coder-next:latest
 
-cline:
-  binary: /home/squibs/.npm-global/bin/cline
-  auto_approve: true
+ollama:
+  base_url: http://localhost:11434
+  default_model: qwen3-coder-next:latest
+  temperature: 0.2
+  num_predict: 8192
 
 defaults:
   runs: 10

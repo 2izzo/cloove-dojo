@@ -7,7 +7,7 @@ import YAML from "yaml";
 import { loadContract, contractToYAML, Contract } from "./contract.js";
 import { startDevServer, stopDevServer, DevServer } from "./dev-server.js";
 import { checkCompliance, ComplianceResult } from "./compliance.js";
-import { fireCline } from "./adapters/cline.js";
+import { fireOllama } from "./adapters/ollama";
 
 /**
  * Full-Stack Kata Runner
@@ -50,10 +50,10 @@ export interface PhaseResult {
  * 1. Scaffold workspace from template
  * 2. npm install
  * 3. Load contract
- * 4. Render & fire dev prompt (Cline develops the app)
+ * 4. Render & fire dev prompt (Ollama develops the app)
  * 5. Start dev server
  * 6. Run compliance check
- * 7. Render & fire SDET prompt (Cline writes E2E tests)
+ * 7. Render & fire SDET prompt (Ollama writes E2E tests)
  * 8. Run E2E tests
  * 9. Run unit tests
  * 10. Stop dev server
@@ -400,29 +400,29 @@ async function fireDevCloove(
     const renderedPath = join(workspaceDir, ".dev-prompt.md");
     writeFileSync(renderedPath, renderedPrompt);
 
-    // Fire Cline with the real Nest adapter interface:
-    // fireCline(prompt, workdir, timeoutMinutes, model)
-    const clineResult = await fireCline(
+    // Fire Ollama with the Ollama adapter:
+    // fireOllama(prompt, workdir, timeoutMinutes, model)
+    const ollamaResult = await fireOllama(
       renderedPrompt,
       workspaceDir,
       10 // 10 minutes for dev
     );
 
-    if (clineResult.exitCode !== 0 || clineResult.timedOut) {
+    if (ollamaResult.exitCode !== 0 || ollamaResult.timedOut) {
       return {
         success: false,
-        message: clineResult.timedOut
+        message: ollamaResult.timedOut
           ? "Dev Cloove timed out"
-          : `Dev Cloove exited with code ${clineResult.exitCode}`,
-        error: clineResult.stderr || clineResult.stdout,
-        details: `Elapsed: ${clineResult.elapsedSeconds}s`,
+          : `Ollama /api/chat returned error code ${ollamaResult.exitCode}`,
+        error: ollamaResult.stderr || ollamaResult.stdout,
+        details: `Elapsed: ${ollamaResult.elapsedSeconds}s`,
       };
     }
 
     return {
       success: true,
-      message: `Dev Cloove completed in ${clineResult.elapsedSeconds}s`,
-      details: clineResult.stdout,
+      message: `Dev Cloove completed in ${ollamaResult.elapsedSeconds}s`,
+      details: ollamaResult.stdout,
     };
   } catch (e) {
     return {
@@ -468,29 +468,29 @@ async function fireSdetCloove(
     const renderedPath = join(workspaceDir, ".sdet-prompt.md");
     writeFileSync(renderedPath, renderedPrompt);
 
-    // Fire Cline with the real Nest adapter interface:
-    // fireCline(prompt, workdir, timeoutMinutes, model)
-    const clineResult = await fireCline(
+    // Fire Ollama with the Ollama adapter:
+    // fireOllama(prompt, workdir, timeoutMinutes, model)
+    const ollamaResult = await fireOllama(
       renderedPrompt,
       workspaceDir,
       10 // 10 minutes for SDET
     );
 
-    if (clineResult.exitCode !== 0 || clineResult.timedOut) {
+    if (ollamaResult.exitCode !== 0 || ollamaResult.timedOut) {
       return {
         success: false,
-        message: clineResult.timedOut
+        message: ollamaResult.timedOut
           ? "SDET Cloove timed out"
-          : `SDET Cloove exited with code ${clineResult.exitCode}`,
-        error: clineResult.stderr || clineResult.stdout,
-        details: `Elapsed: ${clineResult.elapsedSeconds}s`,
+          : `Ollama /api/chat returned error code ${ollamaResult.exitCode}`,
+        error: ollamaResult.stderr || ollamaResult.stdout,
+        details: `Elapsed: ${ollamaResult.elapsedSeconds}s`,
       };
     }
 
     return {
       success: true,
-      message: `SDET Cloove completed in ${clineResult.elapsedSeconds}s`,
-      details: clineResult.stdout,
+      message: `SDET Cloove completed in ${ollamaResult.elapsedSeconds}s`,
+      details: ollamaResult.stdout,
     };
   } catch (e) {
     return {

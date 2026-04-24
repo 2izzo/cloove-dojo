@@ -1,9 +1,9 @@
 # Cloove Dojo — Global Configuration
-version: 0.1.0
+version: 0.2.0
 
 models:
-  primary: devstral:24b-small-2505-q4_K_M
-  alternate: qwen3-coder-next:latest
+  primary: qwen3-coder-next:latest
+  alternate: devstral-dojo:latest
 
 defaults:
   runs_per_prompt: 10
@@ -11,9 +11,9 @@ defaults:
   max_cycles: 10
   language: typescript
 
-cline:
-  binary: /home/squibs/.npm-global/bin/cline
-  auto_approve: true
+# Harness: direct Ollama. See runner/config.yaml for base_url + defaults.
+harness:
+  type: ollama
 
 paths:
   katas: ./katas
