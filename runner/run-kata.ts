@@ -13,6 +13,7 @@ import YAML from "yaml";
 import Mustache from "mustache";
 import { fireOllama } from "./adapters/ollama";
 import { runFullstackKata } from "./run-fullstack";
+import { consolidateBackendRun } from "./consolidator";
 
 const DOJO_ROOT = resolve(import.meta.dir, "..");
 
@@ -279,6 +280,10 @@ async function main() {
       join(resultsDir, `run-${String(i).padStart(2, "0")}.json`),
       JSON.stringify(result, null, 2)
     );
+
+    // Adlerian consolidator: file a drawer to the dev-cloove palace if this run
+    // earned one (full pass = win, all-fail/timeout/blocked = scar, else silent).
+    consolidateBackendRun(DOJO_ROOT, "dev", result);
   }
 
   // Summary

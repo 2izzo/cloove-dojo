@@ -11,3 +11,9 @@ results/
 # Per-run deps inside .workspace (preserve code, drop deps)
 .workspace/*/node_modules/
 .workspace/*/package-lock.json
+
+# Per-cloove mempalaces (Rung 1: write-only, dev-cloove)
+.palaces/*/storage/
+.palaces/*/content/wins/**/*.md
+.palaces/*/content/scars/**/*.md
+.palaces/*/content/general/**/*.md
