@@ -17,3 +17,4 @@ results/
 .palaces/*/content/wins/**/*.md
 .palaces/*/content/scars/**/*.md
 .palaces/*/content/general/**/*.md
+.palaces/*/content/entities.json
