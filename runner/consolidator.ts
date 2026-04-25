@@ -86,18 +86,32 @@ function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+/**
+ * Pull date + HHMMSS out of an ISO timestamp, dropping ms and tz.
+ *   "2026-04-25T17:27:24.899Z" -> { date: "2026-04-25", time: "172724" }
+ *
+ * The time component prevents drawer-filename collisions across batches —
+ * two batches firing the same kata×ring×prompt×run-number on the same day
+ * would overwrite each other without it.
+ */
+function dateTimeFromIso(iso: string): { date: string; time: string } {
+  const [date, rest] = iso.split("T");
+  const time = (rest ?? "").split(".")[0].replace(/:/g, "");
+  return { date, time };
+}
+
 function writeWinDrawer(
   dojoRoot: string,
   cloove: ClooveRole,
   r: BackendKataResult
 ): string {
-  const date = r.timestamp.split("T")[0];
+  const { date, time } = dateTimeFromIso(r.timestamp);
   const dir = join(dojoRoot, ".palaces", cloove, "content", "wins", r.kata);
   mkdirSync(dir, { recursive: true });
 
   const drawerPath = join(
     dir,
-    `${date}-ring${r.ring}-run${paddedRun(r.run_number)}-${slug(r.prompt)}.md`
+    `${date}-${time}-ring${r.ring}-run${paddedRun(r.run_number)}-${slug(r.prompt)}.md`
   );
 
   const body = `---
@@ -138,13 +152,13 @@ function writeScarDrawer(
   r: BackendKataResult,
   reason: string
 ): string {
-  const date = r.timestamp.split("T")[0];
+  const { date, time } = dateTimeFromIso(r.timestamp);
   const dir = join(dojoRoot, ".palaces", cloove, "content", "scars", r.kata);
   mkdirSync(dir, { recursive: true });
 
   const drawerPath = join(
     dir,
-    `${date}-ring${r.ring}-run${paddedRun(r.run_number)}-${slug(reason)}.md`
+    `${date}-${time}-ring${r.ring}-run${paddedRun(r.run_number)}-${slug(reason)}.md`
   );
 
   const body = `---
