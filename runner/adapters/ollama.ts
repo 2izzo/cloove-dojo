@@ -82,6 +82,7 @@ Rules:
 - Prose is allowed BEFORE the first block or AFTER the last block, never between markers.
 - When tests are provided, your implementation MUST export every symbol the tests import. If the test does a named import of a class, export that class (export keyword required).
 - When tests are provided, do NOT write any new test files. Only implement the source files needed to make the provided tests pass. The provided tests ARE the contract.
+- When tests are NOT provided in the prompt, you MUST write a test file yourself before implementing. Tests go in tests/<name>.test.ts (using vitest imports), implementation in src/<name>.ts. Both files must appear in your output. A solution that emits only the implementation is a complete failure of the task.
 - When any test uses expect(...).toThrow() or .rejects.toThrow(), your implementation MUST raise on exactly those inputs. "throws on invalid input" is a hard constraint, not optional. Validate input strictly and throw on any form the tests flag as invalid.
 - Throwing on invalid input means more than type/range checks. If a test expects a throw on a value that would otherwise pass loose validation (e.g., a well-formed string that does not match the format spec), you must validate the STRUCTURE of the input (regex, whitelist, grammar check) and throw on any form the problem domain does not permit. Read each test case in the "throws on invalid input" set and make sure your validation rejects ALL of them, not just the obvious ones.
 - End your entire response with a single final line: **STATUS:** DONE`;
