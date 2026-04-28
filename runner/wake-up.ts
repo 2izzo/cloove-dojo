@@ -1,0 +1,257 @@
+// runner/wake-up.ts
+//
+// Rung 2 — read-side wake-up hook for kata clooves.
+//
+// Before a cloove fires its first prompt for a kata, search the cloove's
+// per-role mempalace for drawers relevant to (kata × ring × role) and format
+// them as an Adlerian preamble that prepends to the rendered prompt.
+//
+// Adlerian shape: forward-looking, scoped, decision-relevant. We do NOT dump
+// every win and scar the cloove ever filed — that's Freudian rumination at
+// agent scale. We pull the top N matches against a focused query and let
+// semantic search do the relevance work.
+//
+// What we surface:
+//   • Hand-authored seeds in general/ (cross-kata craft notes)
+//   • Scars from any kata (what didn't work; transferable craft)
+//
+// What we DON'T surface:
+//   • Wins. They describe outcomes, not what to DO. They're also numerous
+//     once a model is performing well, which would crowd out craft notes
+//     by sheer volume in the search ranking.
+//
+// Implementation note: mempalace search returns the matching CHUNK of a
+// drawer, not the whole file. We use the Source field to read the full
+// drawer from disk so the preamble carries complete craft notes, not
+// arbitrary text fragments.
+//
+// If the palace doesn't exist or returns nothing useful, this returns an
+// empty string and the runner uses the rendered prompt unchanged. Stateless
+// fallback — no error, just no preamble.
+
+import { execSync } from "child_process";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
+import { join } from "path";
+
+import type { ClooveRole } from "./consolidator";
+
+const MEMPALACE_BIN =
+  process.env.MEMPALACE_BIN || "/home/squibs/.local/bin/mempalace";
+
+export interface WakeUpOptions {
+  /** How many top drawers to include in the preamble. Default 5. */
+  topN?: number;
+  /** Extra task keywords appended to the search query. Default []. */
+  extraKeywords?: string[];
+  /** Override the search pool size (mempalace --results). Default topN * 4. */
+  searchPool?: number;
+}
+
+interface SearchHit {
+  index: number;
+  room: string;
+  source: string;
+  matchScore: number;
+}
+
+/**
+ * Strip the YAML frontmatter from a drawer body. We keep the markdown content
+ * because that's what's instructive. Frontmatter is metadata for indexing.
+ */
+function stripFrontmatter(body: string): string {
+  const trimmed = body.trim();
+  if (!trimmed.startsWith("---")) return trimmed;
+  const end = trimmed.indexOf("\n---", 3);
+  if (end < 0) return trimmed;
+  return trimmed.slice(end + 4).trim();
+}
+
+/**
+ * Parse the structured fields (index, room, source, match score) out of
+ * mempalace search's text output. We only need the metadata; the displayed
+ * body is a chunk and we read the full file separately.
+ */
+function parseSearchHits(out: string): SearchHit[] {
+  const hits: SearchHit[] = [];
+  const blocks = out.split(/\n\s*\[(\d+)\]\s+/);
+  for (let i = 1; i < blocks.length; i += 2) {
+    const idx = parseInt(blocks[i], 10);
+    const block = blocks[i + 1] || "";
+    const lines = block.split("\n");
+    const room = (lines[0] || "").trim();
+    const sourceLine = lines.find((l) => l.trim().startsWith("Source:")) || "";
+    const matchLine = lines.find((l) => l.trim().startsWith("Match:")) || "";
+    const source = sourceLine.replace(/.*Source:\s*/, "").trim();
+    const matchScore = parseFloat(matchLine.replace(/.*Match:\s*/, "").trim()) || 0;
+    if (source) hits.push({ index: idx, room, source, matchScore });
+  }
+  return hits;
+}
+
+/**
+ * Find the on-disk path for a drawer given its Source basename and the room
+ * label from the search output. Wins/scars live under <room>/<kata>/<basename>;
+ * general/ drawers live directly under general/<basename>. We glob the role's
+ * content tree to handle both layouts.
+ */
+function findDrawerPath(
+  contentRoot: string,
+  room: string,
+  basename: string
+): string | null {
+  // Room is like "content / general", "content / wins", "content / scars".
+  const roomName = room.split("/").pop()?.trim() || "";
+  const roomDir = join(contentRoot, roomName);
+  if (!existsSync(roomDir)) return null;
+
+  // general/ → flat
+  if (roomName === "general") {
+    const direct = join(roomDir, basename);
+    return existsSync(direct) ? direct : null;
+  }
+
+  // wins/scars → kata-subdir layout. Walk one level deep.
+  for (const entry of readdirSync(roomDir)) {
+    const sub = join(roomDir, entry);
+    if (!statSync(sub).isDirectory()) continue;
+    const candidate = join(sub, basename);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Run a mempalace search against a role's palace and return parsed hits.
+ * Returns [] if the palace doesn't exist or the command errors — this hook
+ * must never break a kata run.
+ */
+function searchPalace(
+  dojoRoot: string,
+  role: ClooveRole,
+  query: string,
+  pool: number
+): SearchHit[] {
+  const palacePath = join(dojoRoot, ".palaces", role, "storage");
+  if (!existsSync(palacePath)) {
+    return [];
+  }
+  try {
+    const out = execSync(
+      `${MEMPALACE_BIN} --palace "${palacePath}" search "${query.replace(/"/g, '\\"')}" --results ${pool}`,
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    );
+    return parseSearchHits(out);
+  } catch (e: any) {
+    const msg = (e?.message ?? String(e)).split("\n")[0];
+    console.warn(`  wake-up: palace search failed (continuing stateless): ${msg}`);
+    return [];
+  }
+}
+
+/**
+ * List all hand-authored seed drawers in a role's general/ room. Seeds are
+ * intentionally a small, curated set of cross-kata craft notes — including
+ * them all is cheaper and more predictable than ranking a population of 5
+ * via semantic search, which biases toward whichever seed lexically matches
+ * the query and crowds the others out.
+ *
+ * When the seed library grows past ~20, we'll add semantic ranking here.
+ * Until then: pull them all, every run.
+ */
+function listSeedDrawers(contentRoot: string): string[] {
+  const generalDir = join(contentRoot, "general");
+  if (!existsSync(generalDir)) return [];
+  return readdirSync(generalDir)
+    .filter((f) => f.startsWith("seed-") && f.endsWith(".md"))
+    .map((f) => join(generalDir, f))
+    .sort(); // deterministic ordering across runs
+}
+
+/**
+ * Build the Adlerian preamble for a kata run. Returns "" when nothing
+ * relevant exists. The runner can unconditionally prepend whatever this
+ * returns.
+ *
+ * Composition strategy:
+ *   1. ALL hand-authored seeds in general/ (small curated set, always
+ *      relevant cross-kata).
+ *   2. TOP N kata-scoped scars from prior runs (semantic search filtered
+ *      to scars/, ranked by match score). What didn't work last time on
+ *      this exact kata × ring.
+ *
+ * Wins are excluded — they describe outcomes, not craft, and they grow
+ * unboundedly which would crowd out actionable lessons.
+ */
+export function loadAdlerianPreamble(
+  dojoRoot: string,
+  role: ClooveRole,
+  kata: string,
+  ring: number,
+  options: WakeUpOptions = {}
+): string {
+  const topN = options.topN ?? 5;
+  const pool = options.searchPool ?? topN * 4;
+  const extra = (options.extraKeywords ?? []).join(" ");
+
+  const contentRoot = join(dojoRoot, ".palaces", role, "content");
+  if (!existsSync(contentRoot)) return "";
+
+  // 1. Always include every seed — they're a small curated set.
+  const seedPaths = listSeedDrawers(contentRoot);
+
+  // 2. Search for kata-scoped scars. Query bias is on the kata × ring axis
+  //    because seeds are already covered above; this search exists to pull
+  //    "what bit me last time on this kata."
+  const query = [`scar ${kata} ring ${ring}`, role, extra]
+    .filter((s) => s && s.trim())
+    .join(" ")
+    .trim();
+
+  const hits = searchPalace(dojoRoot, role, query, pool);
+  const scarHits = hits.filter((h) => h.room.includes("scars"));
+
+  // Dedupe scars by source, keep highest-scoring chunk per drawer.
+  const bySource = new Map<string, SearchHit>();
+  for (const h of scarHits) {
+    const cur = bySource.get(h.source);
+    if (!cur || h.matchScore > cur.matchScore) bySource.set(h.source, h);
+  }
+  const rankedScars = Array.from(bySource.values())
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, topN);
+
+  const scarPaths: string[] = [];
+  for (const hit of rankedScars) {
+    const path = findDrawerPath(contentRoot, hit.room, hit.source);
+    if (path) scarPaths.push(path);
+  }
+
+  // Combine: seeds first (foundational craft), then scars (specific lessons).
+  const allPaths = [...seedPaths, ...scarPaths];
+  if (allPaths.length === 0) return "";
+
+  const sections: string[] = [];
+  for (const path of allPaths) {
+    try {
+      const raw = readFileSync(path, "utf-8");
+      const body = stripFrontmatter(raw);
+      if (body) sections.push(body);
+    } catch {
+      // Skip unreadable drawers silently — not worth failing the hook.
+    }
+  }
+  if (sections.length === 0) return "";
+
+  return [
+    "# Things you've learned on similar katas before",
+    "",
+    "These are notes from prior runs and hand-authored craft seeds. Treat them",
+    "as reminders, not new instructions — the actual task follows below.",
+    "",
+    sections.map((s) => `---\n\n${s}\n`).join("\n"),
+    "---",
+    "",
+    "# Today's task",
+    "",
+  ].join("\n");
+}

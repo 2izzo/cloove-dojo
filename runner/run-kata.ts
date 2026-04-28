@@ -14,22 +14,27 @@ import Mustache from "mustache";
 import { fireOllama } from "./adapters/ollama";
 import { runFullstackKata } from "./run-fullstack";
 import { consolidateBackendRun, minePalace } from "./consolidator";
+import { loadAdlerianPreamble } from "./wake-up";
 
 const DOJO_ROOT = resolve(import.meta.dir, "..");
 
 // --- Parse CLI args ---
-function parseArgs(): { kata: string; ring: number; prompt: string; runs: number; model?: string } {
+function parseArgs(): { kata: string; ring: number; prompt: string; runs: number; model?: string; stateless: boolean } {
   const args = process.argv.slice(2);
   const get = (flag: string) => {
     const idx = args.indexOf(flag);
     return idx >= 0 ? args[idx + 1] : undefined;
   };
+  // --stateless disables the Adlerian wake-up preamble for this run.
+  // Default behavior is stateful (preamble injected when palace exists).
+  const stateless = args.includes("--stateless");
   return {
     kata: get("--kata") || "bowling-game",
     ring: parseInt(get("--ring") || "1"),
     prompt: get("--prompt") || "baseline",
     runs: parseInt(get("--runs") || "10"),
     model: get("--model"),
+    stateless,
   };
 }
 
@@ -164,7 +169,7 @@ function runTests(workspace: string, testPath: string = ""): { passed: boolean; 
 
 // --- Main ---
 async function main() {
-  const { kata, ring, prompt, runs, model } = parseArgs();
+  const { kata, ring, prompt, runs, model, stateless } = parseArgs();
   const dojoConfig = YAML.parse(readFileSync(join(DOJO_ROOT, "dojo.yaml"), "utf-8"));
 
   console.log(`\n=== Cloove Dojo ===`);
@@ -220,12 +225,27 @@ async function main() {
 
 
   // Render prompt
-  const renderedPrompt = renderPrompt(prompt, {
+  const renderedRaw = renderPrompt(prompt, {
     kata_name: kataYaml.name,
     description,
     architecture,
     tests,
   });
+
+  // Rung 2 wake-up: prepend the Adlerian preamble unless --stateless is set.
+  // The hook returns "" if the palace doesn't exist or has no relevant craft.
+  const preamble = stateless
+    ? ""
+    : loadAdlerianPreamble(DOJO_ROOT, "dev", kata, ring, { topN: 5 });
+  if (preamble) {
+    const seeds = (preamble.match(/^# Seed —/gm) || []).length;
+    console.log(`  Adlerian preamble: ${preamble.length} chars (${seeds} seeds)`);
+  } else if (stateless) {
+    console.log(`  Adlerian preamble: SKIPPED (--stateless)`);
+  } else {
+    console.log(`  Adlerian preamble: empty (palace returned no craft)`);
+  }
+  const renderedPrompt = preamble ? `${preamble}${renderedRaw}` : renderedRaw;
 
   // Results directory
   const today = new Date().toISOString().split("T")[0];
@@ -289,7 +309,11 @@ async function main() {
 
     // Adlerian consolidator: file a drawer to the dev-cloove palace if this run
     // earned one (full pass = win, all-fail/timeout/blocked = scar, else silent).
-    consolidateBackendRun(DOJO_ROOT, "dev", result);
+    // Skip palace writes when --stateless so a control run doesn't contaminate
+    // future stateful runs. Stateless = no read, no write — clean separation.
+    if (!stateless) {
+      consolidateBackendRun(DOJO_ROOT, "dev", result);
+    }
   }
 
   // Summary
