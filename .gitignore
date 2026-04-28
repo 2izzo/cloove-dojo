@@ -21,3 +21,4 @@ results/
 
 # Hand-authored seed drawers — committed (cross-kata craft, not run-generated)
 !.palaces/*/content/general/seed-*.md
+!.palaces/*/content/patterns/pattern-*.md

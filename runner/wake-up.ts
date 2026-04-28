@@ -62,6 +62,27 @@ export interface WakeUpOptions {
    * around ~8K chars. Authors should iterate seeds for impact, not volume.
    */
   topNSeeds?: number;
+  /**
+   * Free-form text used to semantically search the patterns/ room for
+   * relevant labeled algorithmic vocabulary. Typically the kata's
+   * description.md + architecture.md concatenated. When empty, no
+   * patterns are loaded.
+   */
+  searchQuery?: string;
+  /**
+   * Hard cap on the number of pattern drawers included in the preamble.
+   * Default 3 — patterns are LARGER than seeds (worked examples on
+   * neutral data) so the cap is tighter. Patterns are ranked by
+   * mempalace search relevance against searchQuery; only patterns with
+   * match score above the threshold are included.
+   */
+  topNPatterns?: number;
+  /**
+   * Minimum relevance score (0..1) for a pattern to be included. Default
+   * 0.30. Patterns below this threshold are skipped — better to include
+   * none than to inject irrelevant vocabulary.
+   */
+  patternMatchThreshold?: number;
 }
 
 interface SearchHit {
@@ -142,6 +163,23 @@ function findDrawerPath(
  * Returns [] if the palace doesn't exist or the command errors — this hook
  * must never break a kata run.
  */
+/**
+ * Sanitize a search query for safe shell embedding. Strips markdown
+ * special characters, collapses whitespace, truncates to a reasonable
+ * length so the command line doesn't blow up. The result is a plain
+ * keyword bag suitable for semantic-similarity search.
+ */
+function sanitizeQuery(query: string): string {
+  return query
+    .replace(/[`#*_~|\\]/g, " ")     // strip markdown markers
+    .replace(/[\r\n]+/g, " ")        // newlines → spaces
+    .replace(/["']/g, " ")           // strip quotes (avoid shell escaping)
+    .replace(/\s+/g, " ")            // collapse whitespace
+    .trim()
+    .slice(0, 600);                  // cap at 600 chars; semantic search only
+                                     // needs the keyword distribution
+}
+
 function searchPalace(
   dojoRoot: string,
   role: ClooveRole,
@@ -152,9 +190,11 @@ function searchPalace(
   if (!existsSync(palacePath)) {
     return [];
   }
+  const safeQuery = sanitizeQuery(query);
+  if (!safeQuery) return [];
   try {
     const out = execSync(
-      `${MEMPALACE_BIN} --palace "${palacePath}" search "${query.replace(/"/g, '\\"')}" --results ${pool}`,
+      `${MEMPALACE_BIN} --palace "${palacePath}" search "${safeQuery}" --results ${pool}`,
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
     );
     return parseSearchHits(out);
@@ -259,6 +299,60 @@ function safeMtime(path: string): number {
 }
 
 /**
+ * Find labeled algorithmic patterns in the patterns/ room that match the
+ * given search query (typically the kata's description). Returns absolute
+ * paths to drawer files, ranked by relevance, capped at topN, and
+ * filtered to only patterns whose match score is at least threshold.
+ *
+ * Patterns are distinct from seeds: seeds are general principles ("write
+ * tests when none provided"), patterns are specific algorithmic
+ * vocabulary on neutral data ("here's how a binary heap is implemented,
+ * with sift-up/sift-down on a generic numeric example"). Patterns are
+ * loaded by semantic relevance, not by always-include.
+ */
+function findPatterns(
+  dojoRoot: string,
+  role: ClooveRole,
+  query: string,
+  topN: number,
+  threshold: number,
+): string[] {
+  if (!query || !query.trim()) return [];
+  const contentRoot = join(dojoRoot, ".palaces", role, "content");
+  const patternsDir = join(contentRoot, "patterns");
+  if (!existsSync(patternsDir)) return [];
+
+  const hits = searchPalace(dojoRoot, role, query, topN * 4);
+  // Patterns are identified by filename prefix `pattern-` and are physically
+  // located in .palaces/<role>/content/patterns/. The mempalace room
+  // assignment can be stale (yaml was updated after initial mining); the
+  // filename prefix is the canonical identifier.
+  const patternHits = hits.filter(
+    (h) => h.source.startsWith("pattern-") && h.matchScore >= threshold,
+  );
+
+  // Dedupe by source — keep highest-scoring chunk per drawer.
+  const bySource = new Map<string, SearchHit>();
+  for (const h of patternHits) {
+    const cur = bySource.get(h.source);
+    if (!cur || h.matchScore > cur.matchScore) bySource.set(h.source, h);
+  }
+
+  const ranked = Array.from(bySource.values())
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, topN);
+
+  const paths: string[] = [];
+  for (const hit of ranked) {
+    const direct = join(patternsDir, hit.source);
+    if (existsSync(direct)) {
+      paths.push(direct);
+    }
+  }
+  return paths;
+}
+
+/**
  * Build the Adlerian preamble for a kata run. Returns "" when nothing
  * relevant exists. The runner can unconditionally prepend whatever this
  * returns.
@@ -287,53 +381,79 @@ export function loadAdlerianPreamble(
   const contentRoot = join(dojoRoot, ".palaces", role, "content");
   if (!existsSync(contentRoot)) return "";
 
-  // 1. Include seeds matching kata type, capped at topNSeeds (default 5).
-  //    The cap bounds preamble length so devstral's instruction-following
-  //    doesn't degrade. When over-cap, the freshest seeds win.
+  // 1. Seeds — generalizable principles. Always include up to topNSeeds.
   const topNSeeds = options.topNSeeds ?? 5;
   const seedPaths = listSeedDrawers(contentRoot, options.kataType, topNSeeds);
 
-  // 2. Scars (DISABLED in v1).
-  //    The current scar drawer format records only "Filed because: all-tests-failed"
-  //    plus the run JSON snapshot — no emitted-file list, no vitest stderr, no
-  //    diagnostic signal. Including them in the preamble injects pessimism
-  //    ("this kata always fails") with no actionable craft, which is the
-  //    Freudian shape we're explicitly avoiding.
+  // 2. Patterns — labeled algorithmic vocabulary on neutral data. Loaded
+  //    by semantic relevance to searchQuery (typically the kata
+  //    description). Only included when match score is high enough that
+  //    the pattern is genuinely relevant; otherwise nothing.
   //
-  //    Re-enable once scar drawers carry real signal: model's emitted files,
-  //    vitest output snippet, parser warnings. Tracked as a separate task.
-  //
-  // (Kept the search infrastructure in place — searchPalace, findDrawerPath,
-  // dedupe — so re-enabling is a small change.)
-  const scarPaths: string[] = [];
-  // Unused for now; suppress lint by referencing.
+  //    Default cap is 2 patterns (each ~1.5-2K chars). Combined with the
+  //    seed budget this keeps total preamble under devstral's
+  //    instruction-following cliff (~10K for backend katas).
+  const topNPatterns = options.topNPatterns ?? 2;
+  const patternThreshold = options.patternMatchThreshold ?? 0.30;
+  const patternPaths = findPatterns(
+    dojoRoot,
+    role,
+    options.searchQuery ?? "",
+    topNPatterns,
+    patternThreshold,
+  );
+
+  // 3. Scars are still disabled in v1 (no diagnostic signal in current
+  //    scar format). The search infrastructure is kept in place via
+  //    findPatterns + searchPalace for re-enable later.
   void pool; void extra;
 
-  const allPaths = [...seedPaths, ...scarPaths];
-  if (allPaths.length === 0) return "";
+  if (seedPaths.length === 0 && patternPaths.length === 0) return "";
 
-  const sections: string[] = [];
-  for (const path of allPaths) {
+  const seedSections: string[] = [];
+  for (const path of seedPaths) {
     try {
-      const raw = readFileSync(path, "utf-8");
-      const body = stripFrontmatter(raw);
-      if (body) sections.push(body);
-    } catch {
-      // Skip unreadable drawers silently — not worth failing the hook.
-    }
+      const body = stripFrontmatter(readFileSync(path, "utf-8"));
+      if (body) seedSections.push(body);
+    } catch { /* skip */ }
   }
-  if (sections.length === 0) return "";
 
-  return [
-    "# Things you've learned on similar katas before",
-    "",
-    "These are notes from prior runs and hand-authored craft seeds. Treat them",
-    "as reminders, not new instructions — the actual task follows below.",
-    "",
-    sections.map((s) => `---\n\n${s}\n`).join("\n"),
-    "---",
-    "",
-    "# Today's task",
-    "",
-  ].join("\n");
+  const patternSections: string[] = [];
+  for (const path of patternPaths) {
+    try {
+      const body = stripFrontmatter(readFileSync(path, "utf-8"));
+      if (body) patternSections.push(body);
+    } catch { /* skip */ }
+  }
+
+  if (seedSections.length === 0 && patternSections.length === 0) return "";
+
+  const out: string[] = [];
+
+  if (seedSections.length > 0) {
+    out.push("# Things you've learned on similar katas before");
+    out.push("");
+    out.push("These are notes from prior runs and hand-authored craft seeds. Treat them");
+    out.push("as reminders, not new instructions — the actual task follows below.");
+    out.push("");
+    out.push(seedSections.map((s) => `---\n\n${s}\n`).join("\n"));
+    out.push("---");
+    out.push("");
+  }
+
+  if (patternSections.length > 0) {
+    out.push("# Algorithmic patterns from your toolkit");
+    out.push("");
+    out.push("These are labeled implementations of common patterns — the vocabulary you");
+    out.push("draw on when building solutions. They use neutral example data; adapt the");
+    out.push("shape to today's task, don't copy the example values.");
+    out.push("");
+    out.push(patternSections.map((s) => `---\n\n${s}\n`).join("\n"));
+    out.push("---");
+    out.push("");
+  }
+
+  out.push("# Today's task");
+  out.push("");
+  return out.join("\n");
 }

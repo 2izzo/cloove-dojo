@@ -15,3 +15,8 @@ rooms:
   keywords:
   - scars
   - scars
+- name: patterns
+  description: Files from patterns/
+  keywords:
+  - patterns
+  - patterns
