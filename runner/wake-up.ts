@@ -38,6 +38,8 @@ import type { ClooveRole } from "./consolidator";
 const MEMPALACE_BIN =
   process.env.MEMPALACE_BIN || "/home/squibs/.local/bin/mempalace";
 
+export type KataType = "backend" | "fullstack";
+
 export interface WakeUpOptions {
   /** How many top drawers to include in the preamble. Default 5. */
   topN?: number;
@@ -45,6 +47,12 @@ export interface WakeUpOptions {
   extraKeywords?: string[];
   /** Override the search pool size (mempalace --results). Default topN * 4. */
   searchPool?: number;
+  /**
+   * Which kata type the wake-up is being built for. When set, seeds whose
+   * applies_to: frontmatter doesn't match are filtered out. When omitted,
+   * all seeds are included (legacy behavior).
+   */
+  kataType?: KataType;
 }
 
 interface SearchHit {
@@ -149,22 +157,67 @@ function searchPalace(
 }
 
 /**
- * List all hand-authored seed drawers in a role's general/ room. Seeds are
- * intentionally a small, curated set of cross-kata craft notes — including
- * them all is cheaper and more predictable than ranking a population of 5
- * via semantic search, which biases toward whichever seed lexically matches
- * the query and crowds the others out.
- *
- * When the seed library grows past ~20, we'll add semantic ranking here.
- * Until then: pull them all, every run.
+ * Read the applies_to: frontmatter line from a seed file. Returns "" if the
+ * file isn't a parseable seed or has no applies_to field — in which case
+ * the seed is treated as "applies to both kata types."
  */
-function listSeedDrawers(contentRoot: string): string[] {
+function readSeedAppliesTo(path: string): string {
+  try {
+    const head = readFileSync(path, "utf-8").slice(0, 1024);
+    const match = head.match(/^applies_to:\s*(.+?)\s*$/m);
+    return match ? match[1].trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Decide whether a seed's applies_to: declaration matches the current kata
+ * type. Logic is conservative: when in doubt, include. We only EXCLUDE a
+ * seed when its applies_to clearly indicates the other kata type.
+ *
+ * Recognized fullstack-only tokens: contains "fullstack"
+ * Recognized backend-only tokens:
+ *   - contains "backend"
+ *   - contains "throws-tests"     (TDD-style, backend pattern)
+ *   - contains "tests-are-not-provided"  (backend Ring 2 shape)
+ *
+ * Everything else (all-katas, any-kata, any-kata-with-vitest, …) is
+ * considered universal and matches both types.
+ */
+function seedMatchesKataType(appliesTo: string, kataType: KataType): boolean {
+  if (!appliesTo) return true;
+  const a = appliesTo.toLowerCase();
+  const fullstackOnly = a.includes("fullstack");
+  const backendOnly =
+    a.includes("backend") ||
+    a.includes("throws-tests") ||
+    a.includes("tests-are-not-provided");
+
+  if (fullstackOnly && !backendOnly) return kataType === "fullstack";
+  if (backendOnly && !fullstackOnly) return kataType === "backend";
+  return true;
+}
+
+/**
+ * List all hand-authored seed drawers in a role's general/ room, optionally
+ * filtered by kata type. Seeds are intentionally a small, curated set of
+ * cross-kata craft notes — including them all is cheaper and more
+ * predictable than ranking a population of <20 via semantic search.
+ *
+ * Filter rule: when kataType is set, drop seeds whose applies_to frontmatter
+ * declares the other kata type. Universal seeds (no applies_to, or generic
+ * tokens) always match.
+ */
+function listSeedDrawers(contentRoot: string, kataType?: KataType): string[] {
   const generalDir = join(contentRoot, "general");
   if (!existsSync(generalDir)) return [];
-  return readdirSync(generalDir)
+  const all = readdirSync(generalDir)
     .filter((f) => f.startsWith("seed-") && f.endsWith(".md"))
     .map((f) => join(generalDir, f))
     .sort(); // deterministic ordering across runs
+  if (!kataType) return all;
+  return all.filter((p) => seedMatchesKataType(readSeedAppliesTo(p), kataType));
 }
 
 /**
@@ -196,8 +249,9 @@ export function loadAdlerianPreamble(
   const contentRoot = join(dojoRoot, ".palaces", role, "content");
   if (!existsSync(contentRoot)) return "";
 
-  // 1. Always include every seed — they're a small curated set.
-  const seedPaths = listSeedDrawers(contentRoot);
+  // 1. Always include every seed that applies to the current kata type.
+  //    When kataType is unspecified, include all seeds (legacy callers).
+  const seedPaths = listSeedDrawers(contentRoot, options.kataType);
 
   // 2. Scars (DISABLED in v1).
   //    The current scar drawer format records only "Filed because: all-tests-failed"

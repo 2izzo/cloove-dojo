@@ -470,7 +470,7 @@ async function fireDevCloove(
     // Adlerian preamble for the dev cloove (suppressed when stateless).
     const devPreamble = stateless
       ? ""
-      : loadAdlerianPreamble(dojoRoot, "dev", kataName, 1, { topN: 5 });
+      : loadAdlerianPreamble(dojoRoot, "dev", kataName, 1, { topN: 5, kataType: "fullstack" });
     if (devPreamble) {
       const seeds = (devPreamble.match(/^# Seed —/gm) || []).length;
       console.log(`    [dev] preamble: ${devPreamble.length} chars (${seeds} seeds)`);
@@ -554,7 +554,7 @@ async function fireSdetCloove(
     // Adlerian preamble for the sdet cloove (suppressed when stateless).
     const sdetPreamble = stateless
       ? ""
-      : loadAdlerianPreamble(dojoRoot, "sdet", kataName, 1, { topN: 5 });
+      : loadAdlerianPreamble(dojoRoot, "sdet", kataName, 1, { topN: 5, kataType: "fullstack" });
     if (sdetPreamble) {
       const seeds = (sdetPreamble.match(/^# Seed —/gm) || []).length;
       console.log(`    [sdet] preamble: ${sdetPreamble.length} chars (${seeds} seeds)`);

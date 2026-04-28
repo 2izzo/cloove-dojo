@@ -269,7 +269,7 @@ async function main() {
   // The hook returns "" if the palace doesn't exist or has no relevant craft.
   const preamble = stateless
     ? ""
-    : loadAdlerianPreamble(DOJO_ROOT, "dev", kata, ring, { topN: 5 });
+    : loadAdlerianPreamble(DOJO_ROOT, "dev", kata, ring, { topN: 5, kataType: kataYaml.type === "fullstack" ? "fullstack" : "backend" });
   if (preamble) {
     const seeds = (preamble.match(/^# Seed —/gm) || []).length;
     console.log(`  Adlerian preamble: ${preamble.length} chars (${seeds} seeds)`);
