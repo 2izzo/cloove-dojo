@@ -13,7 +13,7 @@ import YAML from "yaml";
 import Mustache from "mustache";
 import { fireOllama } from "./adapters/ollama";
 import { runFullstackKata } from "./run-fullstack";
-import { consolidateBackendRun } from "./consolidator";
+import { consolidateBackendRun, minePalace } from "./consolidator";
 
 const DOJO_ROOT = resolve(import.meta.dir, "..");
 
@@ -170,6 +170,12 @@ async function main() {
   console.log(`\n=== Cloove Dojo ===`);
   console.log(`Kata: ${kata} | Ring: ${ring} | Prompt: ${prompt} | Runs: ${runs}`);
   console.log(`Model: ${model || dojoConfig.models.primary}\n`);
+
+  // Ensure the dev-cloove palace is mined before any kata fires (and before
+  // future wake-up reads). Idempotent — mempalace skips unchanged content.
+  // First-time setup: this picks up the hand-authored seeds in
+  // .palaces/dev/content/general/.
+  minePalace(DOJO_ROOT, "dev");
 
   const { kataYaml, ringConfig, description, architecture, tests, kataDir } = loadKata(kata, ring);
 

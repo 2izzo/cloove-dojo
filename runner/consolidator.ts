@@ -191,7 +191,7 @@ ${JSON.stringify(r, null, 2)}
   return drawerPath;
 }
 
-function mineDrawer(dojoRoot: string, cloove: ClooveRole): void {
+export function minePalace(dojoRoot: string, cloove: ClooveRole): void {
   const palacePath = join(dojoRoot, ".palaces", cloove, "storage");
   const contentPath = join(dojoRoot, ".palaces", cloove, "content");
 
@@ -239,6 +239,6 @@ export function consolidateBackendRun(
     console.log(`  ⌬ filed SCAR drawer → ${drawerPath.replace(dojoRoot + "/", "")}`);
   }
 
-  mineDrawer(dojoRoot, cloove);
+  minePalace(dojoRoot, cloove);
   return { verdict, drawerPath };
 }
