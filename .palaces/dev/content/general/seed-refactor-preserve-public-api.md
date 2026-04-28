@@ -2,63 +2,72 @@
 type: seed
 cloove: dev
 topic: refactor-preserve-public-api
-tags: [refactor, exports, legacy, public-api, gilded-rose]
+tags: [refactor, exports, legacy, public-api]
 applies_to: any-kata-with-legacy-code
 ---
 
 # Seed — Refactoring keeps the public API identical
 
 When you refactor legacy code, the **public surface** stays the same: same
-class names, same `export` keywords, same constructor signatures, same
+exported names, same `export` keywords, same constructor signatures, same
 public method names. Internal organization is yours to restructure
-(extract strategies, split methods, rename privates) — but external
-callers must import and instantiate the new code with the exact same
-syntax they used for the old code.
+(extract helpers, split methods, rename privates) — but external callers
+must import and instantiate the new code with the exact same syntax they
+used for the old code.
 
-If the legacy has `export class GildedRose { constructor(items: Item[]) }`
-your refactor must also `export class GildedRose { constructor(items:
-Item[]) }`. If you split the logic across helper classes, those are
-implementation detail — they don't have to be exported, but `GildedRose`
-and any type the consumer imports MUST be exported.
+## The discipline
 
-## What to check before you finish
+Before you finish your refactor:
 
-1. Open the legacy file. Note every `export` and the symbols it exports.
+1. Open the legacy file. List every `export` and the symbol each one
+   exposes — class names, function names, type names.
 2. Open your refactored file. Verify each of those symbols is still
-   exported with the same name and shape.
-3. If your tests `import { GildedRose, Item } from "../src/gilded-rose"`,
-   both `GildedRose` and `Item` must be `export`ed in your refactor.
+   exported, with the same name, the same shape (class vs function vs
+   type), and the same constructor or call signature.
+3. If consumers do `import { Foo, Bar } from "../src/file"`, both `Foo`
+   and `Bar` must be `export`ed in your refactor.
+
+## What "internal" means
+
+You can introduce new helpers, strategies, sub-classes, sub-functions —
+none of those need to be exported. They are implementation detail. Only
+the symbols the legacy file exported are part of the public contract.
 
 ## Common miss
 
 ```ts
-// WRONG — refactor lost the export
-class GildedRose {
-  items: Item[];
-  constructor(items: Item[]) { ... }
-  updateQuality(): Item[] { ... }
+// WRONG — refactor lost the export keyword
+class Foo {
+  constructor(arg: T) { ... }
+  publicMethod(): U { ... }
 }
 
-// Test fails: TypeError: GildedRose is not a constructor
-//             (because import { GildedRose } returns undefined)
+// Test imports { Foo } and gets undefined.
+// Every test fails: "Foo is not a constructor".
 ```
 
 ```ts
 // RIGHT — preserves public surface
-export class GildedRose {
-  items: Item[];
-  constructor(items: Item[]) { ... }
-  updateQuality(): Item[] { ... }
+export class Foo {
+  constructor(arg: T) { ... }
+  publicMethod(): U { ... }
 }
 
-// (NormalItemStrategy, AgedBrieStrategy, etc. — internal helpers,
-// stay un-exported by design)
+// Internal helpers stay un-exported by design:
+class FooHelper { ... }
+class FooDispatcher { ... }
 ```
+
+## Type imports too
+
+If consumers do `import type { Bar } from "../src/file"`, the type must
+also be `export`ed. Even though TypeScript-only types vanish at compile,
+the syntactic re-export is required for the import to resolve.
 
 ## Why this seed exists
 
-Gilded-rose Ring 2 was failing 0/N tests stably with a beautifully-
-structured Strategy Pattern refactor — but devstral forgot the `export`
-keyword on `GildedRose` and `Item`. Every test failed with "GildedRose
-is not a constructor" before any logic ran. The refactor was clean; the
-public surface broke. Always preserve what the legacy file exports.
+Refactor katas reward beautiful internal restructuring (Strategy Pattern,
+extracted helpers, clean dispatch tables) — but a refactor that loses the
+external `export` of the original class makes every consumer's import
+return undefined. The result: clean code that no test can reach. Always
+preserve what the legacy file exported.

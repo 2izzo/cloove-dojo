@@ -16,27 +16,43 @@ for each one. Miss any single testid and your compliance score drops.
 
 For every `- testid: foo` in the contract, your output must contain
 `data-testid="foo"` on a DOM node of the matching `element:` type, in the
-matching `location:`. No selective skipping.
+matching `location:`. No selective skipping. No assuming "the shell layout
+doesn't need testids." If the contract lists it, bind it.
 
-## Common miss
+## Discipline before finalizing
 
-The h1 inside `<header>` is the testid most often forgotten — the model
-writes `<h1>App</h1>` because that "looks Vue-natural," but the contract
-asks for `<h1 data-testid="app-title">App</h1>`. Always re-read the
-contract's elements list and bind each testid.
+Before you emit `STATUS: DONE`, walk the contract's `elements:` list one
+entry at a time. For each entry, verify your output includes a
+`data-testid="<value>"` somewhere. Count them: if the contract has N
+entries, your code has at least N `data-testid` attributes.
 
 ## Pattern
 
 ```html
+<!-- For a header testid the contract lists, bind it -->
 <header>
-  <h1 data-testid="app-title">My Todo App</h1>
+  <h1 data-testid="<header-testid>">{{ title }}</h1>
 </header>
-<main>
-  <form>
-    <input data-testid="todo-input" v-model="newTodo" />
-    <button data-testid="todo-submit" type="submit">Add</button>
-  </form>
-</main>
+
+<!-- For a form input testid the contract lists -->
+<input data-testid="<input-testid>" v-model="value" />
+
+<!-- For a list item that uses a testid_pattern -->
+<li v-for="(item, index) in items" :data-testid="`<item-testid>-${index}`">
+  ...
+</li>
 ```
 
-If the contract lists 5 testids, your output has 5 `data-testid` attributes.
+## The trap
+
+Testids on leaf components (form inputs, list items, buttons) are easy to
+remember — that's where interaction happens. Testids on layout / shell
+components (header titles, footer sections, app frames) are easy to skip
+because they look like "structure, not state." The contract treats them
+identically. Bind every entry.
+
+## Why this seed exists
+
+Compliance scores below 100 stably trace to one or two testids the model
+omitted from shell-level components. The contract is the contract. Read
+every element. Bind every testid.

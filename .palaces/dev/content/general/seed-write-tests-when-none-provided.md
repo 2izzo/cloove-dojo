@@ -35,14 +35,14 @@ import { describe, it, expect } from "vitest";
 import { /* symbols */ } from "../src/<name>";
 
 describe("<name>", () => {
-  it("...", () => {
-    expect(...).toBe(...);
+  it("<behavior>", () => {
+    expect(/* call */).toBe(/* result */);
   });
 });
 ===END===
 
 ===FILE: src/<name>.ts===
-export class /* or function */ ... {
+export function /* or class */ ... {
   ...
 }
 ===END===
@@ -50,20 +50,23 @@ export class /* or function */ ... {
 
 Both blocks. Same response. Tests in `tests/`, implementation in `src/`.
 
-## How many tests
+## How to choose what to test
 
-Aim for the test set the kata description implies. For bowling-game:
-gutter game, all-ones, spare, strike, perfect game. For roman-numerals: at
-least the 1, 4, 9, 49, 99, 1999 boundary cases plus an "invalid input"
-throw test. Cover the main rules described in the architecture, not just
-one happy path.
+Read the description and architecture. They tell you the rules of the
+domain. Your tests should cover:
+
+- The main success path (a normal input → expected output)
+- Each rule the description states explicitly
+- Each boundary the rules imply (empty input, single-element input, max
+  value, exactly-at-threshold values)
+- Every "throws on invalid input" condition the description mentions
+
+Don't write only happy-path tests; the runner credits all-tests-passing,
+and missing edge cases means missing tests means missing pass conditions.
 
 ## Why this seed exists
 
-Devstral on bowling-game Ring 2 (tests removed) was scoring 0/15 because
-it interpreted "implement bowling game" as "implement only" and never
-emitted a test file. vitest then found nothing to run, every run was a
-SCAR. The seeds about *how* to write tests (vitest imports, structural
-validation) don't help if no test file gets written in the first place.
-
-Default behavior: if you don't see a "Tests" section, write one.
+Models trained on "implement X" defaults to writing only the implementation
+when given a no-tests prompt — the prompt's verb is "implement," and the
+model takes that as the entire scope. The TDD context (Ring 2) needs an
+explicit reframing: tests are part of the deliverable, not optional.
