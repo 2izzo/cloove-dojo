@@ -199,34 +199,22 @@ export function loadAdlerianPreamble(
   // 1. Always include every seed — they're a small curated set.
   const seedPaths = listSeedDrawers(contentRoot);
 
-  // 2. Search for kata-scoped scars. Query bias is on the kata × ring axis
-  //    because seeds are already covered above; this search exists to pull
-  //    "what bit me last time on this kata."
-  const query = [`scar ${kata} ring ${ring}`, role, extra]
-    .filter((s) => s && s.trim())
-    .join(" ")
-    .trim();
-
-  const hits = searchPalace(dojoRoot, role, query, pool);
-  const scarHits = hits.filter((h) => h.room.includes("scars"));
-
-  // Dedupe scars by source, keep highest-scoring chunk per drawer.
-  const bySource = new Map<string, SearchHit>();
-  for (const h of scarHits) {
-    const cur = bySource.get(h.source);
-    if (!cur || h.matchScore > cur.matchScore) bySource.set(h.source, h);
-  }
-  const rankedScars = Array.from(bySource.values())
-    .sort((a, b) => b.matchScore - a.matchScore)
-    .slice(0, topN);
-
+  // 2. Scars (DISABLED in v1).
+  //    The current scar drawer format records only "Filed because: all-tests-failed"
+  //    plus the run JSON snapshot — no emitted-file list, no vitest stderr, no
+  //    diagnostic signal. Including them in the preamble injects pessimism
+  //    ("this kata always fails") with no actionable craft, which is the
+  //    Freudian shape we're explicitly avoiding.
+  //
+  //    Re-enable once scar drawers carry real signal: model's emitted files,
+  //    vitest output snippet, parser warnings. Tracked as a separate task.
+  //
+  // (Kept the search infrastructure in place — searchPalace, findDrawerPath,
+  // dedupe — so re-enabling is a small change.)
   const scarPaths: string[] = [];
-  for (const hit of rankedScars) {
-    const path = findDrawerPath(contentRoot, hit.room, hit.source);
-    if (path) scarPaths.push(path);
-  }
+  // Unused for now; suppress lint by referencing.
+  void pool; void extra;
 
-  // Combine: seeds first (foundational craft), then scars (specific lessons).
   const allPaths = [...seedPaths, ...scarPaths];
   if (allPaths.length === 0) return "";
 
