@@ -31,6 +31,7 @@
 
 import { execSync } from "child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
+import type { Stats } from "fs";
 import { join } from "path";
 
 import type { ClooveRole } from "./consolidator";
@@ -53,6 +54,14 @@ export interface WakeUpOptions {
    * all seeds are included (legacy behavior).
    */
   kataType?: KataType;
+  /**
+   * Hard cap on the number of seed drawers included in the preamble.
+   * Default 5. When more seeds match the kata type than this, the most
+   * recently modified seeds win (mtime-descending). This bounds preamble
+   * length so devstral doesn't fall off its instruction-following cliff
+   * around ~8K chars. Authors should iterate seeds for impact, not volume.
+   */
+  topNSeeds?: number;
 }
 
 interface SearchHit {
@@ -200,24 +209,53 @@ function seedMatchesKataType(appliesTo: string, kataType: KataType): boolean {
 }
 
 /**
- * List all hand-authored seed drawers in a role's general/ room, optionally
- * filtered by kata type. Seeds are intentionally a small, curated set of
- * cross-kata craft notes — including them all is cheaper and more
- * predictable than ranking a population of <20 via semantic search.
+ * List hand-authored seed drawers for the preamble, with two-step filtering:
  *
- * Filter rule: when kataType is set, drop seeds whose applies_to frontmatter
- * declares the other kata type. Universal seeds (no applies_to, or generic
- * tokens) always match.
+ *   1. Match by kata type (drop seeds whose applies_to: declares the other
+ *      type — so backend-only seeds don't appear in fullstack preambles
+ *      and vice versa).
+ *
+ *   2. Cap by topNSeeds (devstral falls off its instruction-following
+ *      cliff around ~8K chars of preamble; with avg ~1500 chars/seed that's
+ *      ~5 seeds max). When more seeds match than the cap, the most recently
+ *      modified seeds win — authors can iterate behavior by editing or
+ *      adding seeds, knowing the freshest ones outrank the stalest.
  */
-function listSeedDrawers(contentRoot: string, kataType?: KataType): string[] {
+function listSeedDrawers(
+  contentRoot: string,
+  kataType?: KataType,
+  topNSeeds?: number
+): string[] {
   const generalDir = join(contentRoot, "general");
   if (!existsSync(generalDir)) return [];
-  const all = readdirSync(generalDir)
+
+  let all = readdirSync(generalDir)
     .filter((f) => f.startsWith("seed-") && f.endsWith(".md"))
-    .map((f) => join(generalDir, f))
-    .sort(); // deterministic ordering across runs
-  if (!kataType) return all;
-  return all.filter((p) => seedMatchesKataType(readSeedAppliesTo(p), kataType));
+    .map((f) => join(generalDir, f));
+
+  if (kataType) {
+    all = all.filter((p) =>
+      seedMatchesKataType(readSeedAppliesTo(p), kataType)
+    );
+  }
+
+  if (topNSeeds !== undefined && all.length > topNSeeds) {
+    // Take the topNSeeds freshest by mtime.
+    const withMtime = all.map((p) => ({ p, m: safeMtime(p) }));
+    withMtime.sort((a, b) => b.m - a.m);
+    all = withMtime.slice(0, topNSeeds).map((x) => x.p);
+  }
+
+  return all.sort(); // deterministic ordering once selected
+}
+
+function safeMtime(path: string): number {
+  try {
+    const s: Stats = statSync(path);
+    return s.mtimeMs;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -249,9 +287,11 @@ export function loadAdlerianPreamble(
   const contentRoot = join(dojoRoot, ".palaces", role, "content");
   if (!existsSync(contentRoot)) return "";
 
-  // 1. Always include every seed that applies to the current kata type.
-  //    When kataType is unspecified, include all seeds (legacy callers).
-  const seedPaths = listSeedDrawers(contentRoot, options.kataType);
+  // 1. Include seeds matching kata type, capped at topNSeeds (default 5).
+  //    The cap bounds preamble length so devstral's instruction-following
+  //    doesn't degrade. When over-cap, the freshest seeds win.
+  const topNSeeds = options.topNSeeds ?? 5;
+  const seedPaths = listSeedDrawers(contentRoot, options.kataType, topNSeeds);
 
   // 2. Scars (DISABLED in v1).
   //    The current scar drawer format records only "Filed because: all-tests-failed"
