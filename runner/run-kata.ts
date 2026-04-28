@@ -13,7 +13,12 @@ import YAML from "yaml";
 import Mustache from "mustache";
 import { fireOllama } from "./adapters/ollama";
 import { runFullstackKata } from "./run-fullstack";
-import { consolidateBackendRun, minePalace } from "./consolidator";
+import {
+  consolidateBackendRun,
+  consolidateFullstackRun,
+  minePalace,
+  type FullstackKataResult,
+} from "./consolidator";
 import { loadAdlerianPreamble } from "./wake-up";
 
 const DOJO_ROOT = resolve(import.meta.dir, "..");
@@ -202,6 +207,7 @@ async function main() {
         dojoRoot: DOJO_ROOT,
         model,
         temperature: kataYaml?.harness?.temperature,
+        stateless,
       });
 
       console.log(`  Scaffold: ${fsResult.phases.scaffold.success ? "✓" : "✗"}`);
@@ -216,6 +222,33 @@ async function main() {
         join(resultsDir, `run-${String(i).padStart(2, "0")}.json`),
         JSON.stringify(fsResult, null, 2)
       );
+
+      // Adlerian consolidator for fullstack runs (dev + sdet) — skipped
+      // when stateless so a control run doesn't contaminate future ones.
+      if (!stateless) {
+        const fkr: FullstackKataResult = {
+          kata,
+          ring: 1,
+          prompt,
+          model: model || dojoConfig.models.primary,
+          run_number: i,
+          timestamp: new Date().toISOString(),
+          workspace,
+          dev_success: fsResult.phases.dev.success,
+          compliance_score: (fsResult.phases.compliance as any).foundElements ?? 0,
+          compliance_total: (fsResult.phases.compliance as any).totalElements ?? 0,
+          unit_pass: fsResult.phases.tests_unit.success,
+          unit_passing: 0, // not surfaced by current PhaseResult shape
+          unit_total: 0,
+          sdet_success: fsResult.phases.sdet.success,
+          e2e_pass: fsResult.phases.tests_e2e.success,
+          e2e_passing: 0, // not surfaced by current PhaseResult shape
+          e2e_total: 0,
+          duration: fsResult.duration,
+          errors: fsResult.errors,
+        };
+        consolidateFullstackRun(DOJO_ROOT, fkr);
+      }
     }
 
     const totalMsg = `\n=== Fullstack Summary for ${kata} ===\nRuns: ${runs} | Results: ${resultsDir}`;

@@ -1,0 +1,17 @@
+wing: content
+rooms:
+- name: wins
+  description: Files from wins/
+  keywords:
+  - wins
+  - wins
+- name: general
+  description: Files from general/
+  keywords:
+  - general
+  - general
+- name: scars
+  description: Files from scars/
+  keywords:
+  - scars
+  - scars

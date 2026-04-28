@@ -242,3 +242,244 @@ export function consolidateBackendRun(
   minePalace(dojoRoot, cloove);
   return { verdict, drawerPath };
 }
+
+// --- Fullstack consolidation (added for SDET path) ---
+//
+// Fullstack katas produce two role-shaped outcomes per run: a dev-cloove
+// outcome (did the app meet its contract?) and an sdet-cloove outcome (did
+// the e2e tests pass?). Each gets filed to its own per-cloove palace so the
+// next run's wake-up hook pulls role-relevant craft.
+//
+// We classify each role independently using a structural subset of the
+// fullstack pipeline result — declared here so consolidator.ts has no
+// import-cycle risk with run-fullstack.ts.
+
+export interface FullstackKataResult {
+  kata: string;
+  ring: number;
+  prompt: string;
+  model: string;
+  run_number: number;
+  timestamp: string;
+  workspace: string;
+
+  // Dev-cloove judgment inputs.
+  dev_success: boolean;
+  compliance_score: number;
+  compliance_total: number;
+  unit_pass: boolean;
+  unit_passing: number;
+  unit_total: number;
+
+  // SDET-cloove judgment inputs.
+  sdet_success: boolean;
+  e2e_pass: boolean;
+  e2e_passing: number;
+  e2e_total: number;
+
+  // Shared.
+  duration: number;
+  errors: string[];
+}
+
+function classifyFullstackDev(r: FullstackKataResult): Verdict {
+  // WIN: dev phase ok, full compliance, unit tests green.
+  if (
+    r.dev_success &&
+    r.compliance_total > 0 &&
+    r.compliance_score === r.compliance_total &&
+    r.unit_pass
+  ) {
+    return "win";
+  }
+  // SCAR: dev phase failed entirely, OR no compliance signal at all.
+  if (!r.dev_success || r.compliance_score === 0) {
+    return "scar";
+  }
+  return "silent";
+}
+
+function classifyFullstackSdet(r: FullstackKataResult): Verdict {
+  // WIN: sdet phase ok and every e2e test passed.
+  if (
+    r.sdet_success &&
+    r.e2e_total > 0 &&
+    r.e2e_pass &&
+    r.e2e_passing === r.e2e_total
+  ) {
+    return "win";
+  }
+  // SCAR: sdet phase didn't run cleanly, OR not a single e2e test passed.
+  if (!r.sdet_success || r.e2e_passing === 0) {
+    return "scar";
+  }
+  return "silent";
+}
+
+function writeFullstackDevDrawer(
+  dojoRoot: string,
+  r: FullstackKataResult,
+  verdict: "win" | "scar"
+): string {
+  const { date, time } = dateTimeFromIso(r.timestamp);
+  const room = verdict === "win" ? "wins" : "scars";
+  const dir = join(dojoRoot, ".palaces", "dev", "content", room, r.kata);
+  mkdirSync(dir, { recursive: true });
+
+  const tag =
+    verdict === "win"
+      ? slug(r.prompt)
+      : !r.dev_success
+      ? "dev-phase-failed"
+      : r.compliance_score === 0
+      ? "compliance-zero"
+      : "partial";
+
+  const drawerPath = join(
+    dir,
+    `${date}-${time}-fullstack-run${paddedRun(r.run_number)}-${tag}.md`
+  );
+
+  const header =
+    verdict === "win"
+      ? `# Win — ${r.kata} fullstack run ${paddedRun(r.run_number)} (dev cloove)`
+      : `# Scar — ${r.kata} fullstack run ${paddedRun(r.run_number)} (dev cloove)`;
+
+  const body = `---
+type: ${verdict}
+cloove: dev
+kata: ${r.kata}
+ring: ${r.ring}
+prompt: ${r.prompt}
+model: ${r.model}
+run: ${r.run_number}
+date: ${date}
+compliance_score: ${r.compliance_score}/${r.compliance_total}
+unit_tests: ${r.unit_passing}/${r.unit_total}
+fullstack: true
+---
+
+${header}
+
+Compliance: ${r.compliance_score}/${r.compliance_total}. Unit tests: ${r.unit_passing}/${r.unit_total} (${r.unit_pass ? "pass" : "fail"}). Dev phase: ${r.dev_success ? "ok" : "failed"}.
+
+## Run snapshot
+
+\`\`\`json
+${JSON.stringify(r, null, 2)}
+\`\`\`
+`;
+
+  writeFileSync(drawerPath, body);
+  return drawerPath;
+}
+
+function writeFullstackSdetDrawer(
+  dojoRoot: string,
+  r: FullstackKataResult,
+  verdict: "win" | "scar"
+): string {
+  const { date, time } = dateTimeFromIso(r.timestamp);
+  const room = verdict === "win" ? "wins" : "scars";
+  const dir = join(dojoRoot, ".palaces", "sdet", "content", room, r.kata);
+  mkdirSync(dir, { recursive: true });
+
+  const tag =
+    verdict === "win"
+      ? slug(r.prompt)
+      : !r.sdet_success
+      ? "sdet-phase-failed"
+      : r.e2e_passing === 0
+      ? "no-e2e-tests-passed"
+      : "partial";
+
+  const drawerPath = join(
+    dir,
+    `${date}-${time}-fullstack-run${paddedRun(r.run_number)}-${tag}.md`
+  );
+
+  const header =
+    verdict === "win"
+      ? `# Win — ${r.kata} fullstack run ${paddedRun(r.run_number)} (sdet cloove)`
+      : `# Scar — ${r.kata} fullstack run ${paddedRun(r.run_number)} (sdet cloove)`;
+
+  const body = `---
+type: ${verdict}
+cloove: sdet
+kata: ${r.kata}
+ring: ${r.ring}
+prompt: ${r.prompt}
+model: ${r.model}
+run: ${r.run_number}
+date: ${date}
+e2e_tests: ${r.e2e_passing}/${r.e2e_total}
+sdet_success: ${r.sdet_success}
+fullstack: true
+---
+
+${header}
+
+E2E tests: ${r.e2e_passing}/${r.e2e_total} (${r.e2e_pass ? "pass" : "fail"}). SDET phase: ${r.sdet_success ? "ok" : "failed"}.
+
+## Run snapshot
+
+\`\`\`json
+${JSON.stringify(r, null, 2)}
+\`\`\`
+`;
+
+  writeFileSync(drawerPath, body);
+  return drawerPath;
+}
+
+/**
+ * Consolidate a fullstack kata run into per-role drawers. Files a drawer for
+ * each cloove (dev + sdet) when its outcome warrants one, mines each role's
+ * palace afterward. Same Adlerian filing rule as backend katas: positive-first,
+ * silent for partial outcomes, scars only for catastrophic ones.
+ *
+ * The runner can call this unconditionally; it skips writes for any role
+ * whose palace doesn't exist, and skips silent verdicts.
+ */
+export function consolidateFullstackRun(
+  dojoRoot: string,
+  result: FullstackKataResult
+): {
+  dev: { verdict: Verdict; drawerPath: string | null };
+  sdet: { verdict: Verdict; drawerPath: string | null };
+} {
+  const out = {
+    dev: { verdict: "silent" as Verdict, drawerPath: null as string | null },
+    sdet: { verdict: "silent" as Verdict, drawerPath: null as string | null },
+  };
+
+  // --- Dev cloove ---
+  const devPalaceRoot = join(dojoRoot, ".palaces", "dev");
+  if (existsSync(devPalaceRoot)) {
+    const devVerdict = classifyFullstackDev(result);
+    out.dev.verdict = devVerdict;
+    if (devVerdict !== "silent") {
+      out.dev.drawerPath = writeFullstackDevDrawer(dojoRoot, result, devVerdict);
+      console.log(
+        `  ⌬ filed ${devVerdict.toUpperCase()} drawer (dev) → ${out.dev.drawerPath.replace(dojoRoot + "/", "")}`
+      );
+      minePalace(dojoRoot, "dev");
+    }
+  }
+
+  // --- SDET cloove ---
+  const sdetPalaceRoot = join(dojoRoot, ".palaces", "sdet");
+  if (existsSync(sdetPalaceRoot)) {
+    const sdetVerdict = classifyFullstackSdet(result);
+    out.sdet.verdict = sdetVerdict;
+    if (sdetVerdict !== "silent") {
+      out.sdet.drawerPath = writeFullstackSdetDrawer(dojoRoot, result, sdetVerdict);
+      console.log(
+        `  ⌬ filed ${sdetVerdict.toUpperCase()} drawer (sdet) → ${out.sdet.drawerPath.replace(dojoRoot + "/", "")}`
+      );
+      minePalace(dojoRoot, "sdet");
+    }
+  }
+
+  return out;
+}

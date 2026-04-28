@@ -8,6 +8,7 @@ import { loadContract, contractToYAML, Contract } from "./contract.js";
 import { startDevServer, stopDevServer, DevServer } from "./dev-server.js";
 import { checkCompliance, ComplianceResult } from "./compliance.js";
 import { fireOllama } from "./adapters/ollama";
+import { loadAdlerianPreamble } from "./wake-up";
 
 /**
  * Full-Stack Kata Runner
@@ -20,6 +21,7 @@ export interface FullstackKataOptions {
   dojoRoot?: string; // Root of dojo directory (inferred if not given)
   model?: string; // Optional model override (passed to fireOllama)
   temperature?: number; // Optional temperature override for fireOllama
+  stateless?: boolean; // When true, skip Adlerian preamble (no palace read)
 }
 
 export interface FullstackRunResult {
@@ -154,7 +156,9 @@ export async function runFullstackKata(
         dojoRoot,
         opts.model,
         opts.temperature
-      );
+      ,
+      opts.stateless ?? false
+    );
       result.phases.dev = devResult;
       if (!devResult.success) {
         throw new Error(`Dev Cloove failed: ${devResult.error}`);
@@ -247,7 +251,9 @@ export async function runFullstackKata(
           dojoRoot,
           opts.model,
           opts.temperature
-        );
+        ,
+      opts.stateless ?? false
+    );
         result.phases.sdet = sdetResult;
         if (!sdetResult.success) {
           result.errors.push(`SDET Cloove returned: ${sdetResult.error}`);
@@ -420,7 +426,8 @@ async function fireDevCloove(
   contract: Contract,
   dojoRoot: string,
   model?: string,
-  temperature?: number
+  temperature?: number,
+  stateless: boolean = false
 ): Promise<PhaseResult> {
   try {
     const promptPath = join(dojoRoot, "prompts", "fullstack-dev-v1", "implement.md");
@@ -460,10 +467,21 @@ async function fireDevCloove(
     const renderedPath = join(workspaceDir, ".dev-prompt.md");
     writeFileSync(renderedPath, renderedPrompt);
 
+    // Adlerian preamble for the dev cloove (suppressed when stateless).
+    const devPreamble = stateless
+      ? ""
+      : loadAdlerianPreamble(dojoRoot, "dev", kataName, 1, { topN: 5 });
+    if (devPreamble) {
+      const seeds = (devPreamble.match(/^# Seed —/gm) || []).length;
+      console.log(`    [dev] preamble: ${devPreamble.length} chars (${seeds} seeds)`);
+    } else if (stateless) {
+      console.log(`    [dev] preamble: SKIPPED (--stateless)`);
+    }
+
     // Fire Ollama with the Ollama adapter:
     // fireOllama(prompt, workdir, timeoutMinutes, model)
     const ollamaResult = await fireOllama(
-      renderedPrompt,
+      devPreamble ? `${devPreamble}${renderedPrompt}` : renderedPrompt,
       workspaceDir,
       10, // 10 minutes for dev
       model,
@@ -505,7 +523,8 @@ async function fireSdetCloove(
   contract: Contract,
   dojoRoot: string,
   model?: string,
-  temperature?: number
+  temperature?: number,
+  stateless: boolean = false
 ): Promise<PhaseResult> {
   try {
     const promptPath = join(dojoRoot, "prompts", "sdet-v1", "implement.md");
@@ -532,10 +551,21 @@ async function fireSdetCloove(
     const renderedPath = join(workspaceDir, ".sdet-prompt.md");
     writeFileSync(renderedPath, renderedPrompt);
 
+    // Adlerian preamble for the sdet cloove (suppressed when stateless).
+    const sdetPreamble = stateless
+      ? ""
+      : loadAdlerianPreamble(dojoRoot, "sdet", kataName, 1, { topN: 5 });
+    if (sdetPreamble) {
+      const seeds = (sdetPreamble.match(/^# Seed —/gm) || []).length;
+      console.log(`    [sdet] preamble: ${sdetPreamble.length} chars (${seeds} seeds)`);
+    } else if (stateless) {
+      console.log(`    [sdet] preamble: SKIPPED (--stateless)`);
+    }
+
     // Fire Ollama with the Ollama adapter:
     // fireOllama(prompt, workdir, timeoutMinutes, model)
     const ollamaResult = await fireOllama(
-      renderedPrompt,
+      sdetPreamble ? `${sdetPreamble}${renderedPrompt}` : renderedPrompt,
       workspaceDir,
       10, // 10 minutes for SDET
       model,
