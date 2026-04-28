@@ -23,9 +23,9 @@ The checksum: take the digit values `d1, d2, ..., d10` (where `'X'` is
 isValidIsbn10("0306406152")    → true
 isValidIsbn10("0-306-40615-2") → true   // hyphens ignored
 isValidIsbn10("0471958697")    → true
-isValidIsbn10("0-19-852663-X") → true   // X check digit
-isValidIsbn10("123456789X")    → true
-isValidIsbn10("3598215088")    → false
+isValidIsbn10("043942089X")    → true   // X check digit (real ISBN: Harry Potter)
+isValidIsbn10("123456789X")    → true   // X check digit
+isValidIsbn10("0306406151")    → false  // wrong checksum (last digit altered)
 isValidIsbn10("359821507")     → false  // too short
 isValidIsbn10("X123456789")    → false  // X only valid in position 10
 isValidIsbn10("")              → false
