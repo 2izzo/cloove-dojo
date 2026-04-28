@@ -1,0 +1,28 @@
+name: caesar-cipher
+language: typescript
+difficulty: easy
+source: "Classic shift cipher"
+description_file: description.md
+architecture_file: architecture.md
+
+rings:
+  1:
+    label: "All given (description + architecture + tests)"
+    provides: [description, architecture, tests]
+    agent_task: "Implement encode(text, shift) so that all provided tests pass"
+  2:
+    label: "Tests removed"
+    provides: [description, architecture]
+    agent_task: "Write tests, then implement encode(text, shift)"
+  3:
+    label: "Architecture removed"
+    provides: [description]
+    agent_task: "Design the API, write tests, implement"
+
+scoring:
+  tests_pass: { weight: 60, type: binary }
+  code_quality: { weight: 20, type: lint_score }
+  time: { weight: 20, type: inverse_linear }
+
+max_cycles: 5
+timeout_minutes: 10
